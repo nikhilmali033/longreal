@@ -6,334 +6,320 @@ import pytesseract
 import os
 import subprocess
 import datetime
+import signal
 import logging
 from pathlib import Path
 
 class FlashcardApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Flashcard OCR")
+        self.root.title("Flashcard App")
         
-        # Get screen dimensions
-        self.screen_width = root.winfo_screenwidth()
-        self.screen_height = root.winfo_screenheight()
+        # Configure for 3.5" TFT LCD (480x320 is common for these displays)
+        self.screen_width = 480
+        self.screen_height = 320
+        self.root.geometry(f"{self.screen_width}x{self.screen_height}")
         
-        # Make it fullscreen and remove window decorations
-        self.root.attributes('-fullscreen', True)
-        self.root.config(cursor="none")  # Hide cursor for touch interface
-        
-        # Set up directories
+        # Setup directories
         self.base_dir = Path("flashcards")
-        self.image_dir = self.base_dir / "images"
+        self.images_dir = self.base_dir / "images"
         self.debug_dir = self.base_dir / "debug"
-        for dir_path in [self.base_dir, self.image_dir, self.debug_dir]:
-            dir_path.mkdir(exist_ok=True)
-            
-        # Set up logging
+        for directory in [self.base_dir, self.images_dir, self.debug_dir]:
+            directory.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize logging
         logging.basicConfig(
-            filename='flashcard_ocr.log',
+            filename='flashcard_app.log',
             level=logging.DEBUG,
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
         
-        # Initialize state variables
-        self.current_image = None
-        self.current_frame = None
+        # Setup SIGINT handler
+        signal.signal(signal.SIGINT, self.handle_sigint)
         
-        # Create and show main menu
-        self.show_main_menu()
-        
-    def show_main_menu(self):
-        self.clear_screen()
-        
-        # Create main menu frame
-        menu_frame = tk.Frame(self.root)
-        menu_frame.pack(expand=True)
-        
-        # Calculate button sizes based on screen
-        button_width = min(200, self.screen_width // 2)
-        button_height = min(100, self.screen_height // 4)
-        
-        # Create menu buttons
-        tk.Button(
-            menu_frame,
-            text="New Flashcard",
-            command=self.start_new_flashcard,
-            width=button_width,
-            height=button_height
-        ).pack(pady=20)
-        
-        tk.Button(
-            menu_frame,
-            text="View Flashcards",
-            command=self.show_flashcard_list,
-            width=button_width,
-            height=button_height
-        ).pack(pady=20)
-        
+        # Initialize main screen
+        self.current_screen = None
+        self.show_main_screen()
+    
+    def handle_sigint(self, signum, frame):
+        """Handle Ctrl+C gracefully"""
+        logging.info("Received SIGINT, shutting down...")
+        self.root.quit()
+    
     def clear_screen(self):
-        """Remove all widgets from the screen"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-            
+        """Clear current screen contents"""
+        if self.current_screen:
+            self.current_screen.destroy()
+    
+    def create_button(self, parent, text, command, height=2):
+        """Create a standardized button"""
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            height=height,
+            font=('Arial', 16),
+            width=20
+        )
+    
+    def show_main_screen(self):
+        """Display main menu"""
+        self.clear_screen()
+        self.current_screen = tk.Frame(self.root)
+        self.current_screen.pack(expand=True)
+        
+        self.create_button(
+            self.current_screen,
+            "New Flashcard",
+            self.start_new_flashcard
+        ).pack(pady=20)
+        
+        self.create_button(
+            self.current_screen,
+            "View Flashcards",
+            self.show_flashcard_list
+        ).pack(pady=20)
+    
     def capture_image(self):
         """Capture image using libcamera-jpeg"""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = self.image_dir / f"temp_{timestamp}.jpg"
+        filename = self.images_dir / f"temp_{timestamp}.jpg"
         
         try:
-            # Adjust resolution for your screen
             cmd = [
                 "libcamera-jpeg",
                 "-o", str(filename),
-                "--width", "640",  # Adjusted for smaller display
-                "--height", "480",
+                "--width", "2304",
+                "--height", "1296",
                 "--nopreview"
             ]
             
             subprocess.run(cmd, check=True)
-            logging.debug(f"Image captured: {filename}")
+            logging.info(f"Image captured: {filename}")
             return filename
         except subprocess.CalledProcessError as e:
             logging.error(f"Camera capture error: {e}")
             return None
-            
+    
     def start_new_flashcard(self):
+        """Start new flashcard creation process"""
         self.clear_screen()
+        self.current_screen = tk.Frame(self.root)
+        self.current_screen.pack(expand=True)
         
-        # Create capture button frame
-        capture_frame = tk.Frame(self.root)
-        capture_frame.pack(expand=True)
-        
-        tk.Button(
-            capture_frame,
-            text="Take Picture",
-            command=self.handle_capture,
-            width=20,
-            height=3
+        self.create_button(
+            self.current_screen,
+            "Take Picture",
+            self.take_picture_and_label
         ).pack(pady=20)
         
-        tk.Button(
-            capture_frame,
-            text="Back",
-            command=self.show_main_menu,
-            width=10,
-            height=2
-        ).pack(pady=10)
-        
-    def handle_capture(self):
-        """Handle image capture and transition to OCR"""
+        self.create_button(
+            self.current_screen,
+            "Back",
+            self.show_main_screen
+        ).pack(pady=20)
+    
+    def take_picture_and_label(self):
+        """Capture image and proceed to labeling"""
         image_path = self.capture_image()
         if image_path:
-            self.current_image = image_path
-            self.show_ocr_input()
-            
-    def show_ocr_input(self):
-        """Show OCR drawing interface"""
+            self.current_image_path = image_path
+            self.show_ocr_screen()
+        else:
+            # Show error message
+            tk.messagebox.showerror(
+                "Error",
+                "Failed to capture image. Please try again."
+            )
+    
+    def show_ocr_screen(self):
+        """Show OCR input screen"""
         self.clear_screen()
-        
-        # Create drawing canvas sized for small screen
-        canvas_size = min(self.screen_width - 20, 300)  # Maximum 300px wide
-        char_size = canvas_size // 5  # Size for each character region
-        
-        self.canvas = tk.Canvas(
+        self.current_screen = OCRScreen(
             self.root,
+            self.screen_width,
+            self.screen_height,
+            self.finish_flashcard,
+            self.show_main_screen
+        )
+    
+    def finish_flashcard(self, label):
+        """Save flashcard with OCR label"""
+        if hasattr(self, 'current_image_path'):
+            # Rename image file with label
+            new_path = self.images_dir / f"{label}.jpg"
+            Path(self.current_image_path).rename(new_path)
+            logging.info(f"Created flashcard: {label}")
+            
+            # Return to main screen
+            self.show_main_screen()
+    
+    def show_flashcard_list(self):
+        """Display list of existing flashcards"""
+        self.clear_screen()
+        self.current_screen = tk.Frame(self.root)
+        self.current_screen.pack(expand=True)
+        
+        # Create scrollable frame for flashcard list
+        canvas = tk.Canvas(self.current_screen)
+        scrollbar = tk.Scrollbar(
+            self.current_screen,
+            orient="vertical",
+            command=canvas.yview
+        )
+        scrollable_frame = tk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # List all flashcards
+        for image_file in sorted(self.images_dir.glob("*.jpg")):
+            name = image_file.stem
+            self.create_button(
+                scrollable_frame,
+                name,
+                lambda p=image_file: self.show_flashcard(p),
+                height=1
+            ).pack(pady=5)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.create_button(
+            self.current_screen,
+            "Back",
+            self.show_main_screen,
+            height=1
+        ).pack(pady=10)
+    
+    def show_flashcard(self, image_path):
+        """Display individual flashcard"""
+        self.clear_screen()
+        self.current_screen = tk.Frame(self.root)
+        self.current_screen.pack(expand=True)
+        
+        # Load and resize image to fit screen
+        image = Image.open(image_path)
+        image.thumbnail((
+            self.screen_width - 20,
+            self.screen_height - 60
+        ))
+        photo = ImageTk.PhotoImage(image)
+        
+        # Display image
+        label = tk.Label(self.current_screen, image=photo)
+        label.image = photo  # Keep reference
+        label.pack(pady=10)
+        
+        self.create_button(
+            self.current_screen,
+            "Back",
+            self.show_flashcard_list,
+            height=1
+        ).pack(pady=5)
+
+class OCRScreen:
+    def __init__(self, root, width, height, callback, back_callback):
+        self.frame = tk.Frame(root)
+        self.frame.pack(expand=True)
+        
+        # Drawing canvas for OCR
+        canvas_size = min(width, height) - 60
+        self.canvas = tk.Canvas(
+            self.frame,
             width=canvas_size,
-            height=char_size,
+            height=canvas_size,
             bg="white"
         )
         self.canvas.pack(pady=10)
         
-        # Create character regions
-        self.regions = []
-        for i in range(5):  # 5 character regions
-            x1 = i * char_size
-            x2 = x1 + char_size
-            region = self.canvas.create_rectangle(
-                x1, 0, x2, char_size,
-                outline="blue"
-            )
-            self.regions.append({
-                'id': region,
-                'coords': (x1, 0, x2, char_size)
-            })
-            
-        # Create image buffer for each region
-        self.region_images = [
-            Image.new('L', (char_size, char_size), 'white')
-            for _ in range(5)
-        ]
+        # Drawing state
+        self.drawing = False
+        self.last_x = None
+        self.last_y = None
         
-        # Bind drawing events
+        # Create image buffer
+        self.image = Image.new('L', (canvas_size, canvas_size), 'white')
+        self.draw = ImageDraw.Draw(self.image)
+        
+        # Bind events
         self.canvas.bind("<Button-1>", self.start_drawing)
-        self.canvas.bind("<B1-Motion>", self.draw)
+        self.canvas.bind("<B1-Motion>", self.draw_character)
         self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
         
-        # Control buttons
+        # Buttons
         tk.Button(
-            self.root,
+            self.frame,
             text="Recognize",
-            command=self.process_and_save_flashcard
-        ).pack(pady=5)
+            command=lambda: self.recognize_and_callback(callback)
+        ).pack(side=tk.LEFT, padx=10)
         
         tk.Button(
-            self.root,
+            self.frame,
             text="Clear",
-            command=self.clear_drawing
-        ).pack(pady=5)
+            command=self.clear_canvas
+        ).pack(side=tk.LEFT, padx=10)
         
         tk.Button(
-            self.root,
+            self.frame,
             text="Back",
-            command=self.show_main_menu
-        ).pack(pady=5)
-        
+            command=back_callback
+        ).pack(side=tk.RIGHT, padx=10)
+    
     def start_drawing(self, event):
-        """Initialize drawing in a region"""
-        self.drawing = False
-        self.current_region = None
-        
-        for i, region in enumerate(self.regions):
-            x1, y1, x2, y2 = region['coords']
-            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-                self.drawing = True
-                self.current_region = i
-                self.last_x = event.x - x1
-                self.last_y = event.y
-                break
-                
-    def draw(self, event):
-        """Handle drawing within a region"""
-        if not self.drawing or self.current_region is None:
-            return
-            
-        region = self.regions[self.current_region]
-        x1, y1, x2, y2 = region['coords']
-        
-        if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-            curr_x = event.x - x1
-            curr_y = event.y
-            
-            # Draw on canvas
+        self.drawing = True
+        self.last_x = event.x
+        self.last_y = event.y
+    
+    def draw_character(self, event):
+        if self.drawing:
             self.canvas.create_line(
+                self.last_x, self.last_y,
                 event.x, event.y,
-                self.last_x + x1, self.last_y,
-                width=2,
-                fill="black"
+                width=3
             )
-            
-            # Draw on image buffer
-            draw = ImageDraw.Draw(self.region_images[self.current_region])
-            draw.line(
-                [self.last_x, self.last_y - y1, curr_x, curr_y - y1],
+            self.draw.line(
+                [self.last_x, self.last_y, event.x, event.y],
                 fill="black",
-                width=2
+                width=3
             )
-            
-            self.last_x = curr_x
-            self.last_y = curr_y
-            
+            self.last_x = event.x
+            self.last_y = event.y
+    
     def stop_drawing(self, event):
         self.drawing = False
+    
+    def clear_canvas(self):
+        self.canvas.delete("all")
+        self.image = Image.new('L', self.image.size, 'white')
+        self.draw = ImageDraw.Draw(self.image)
+    
+    def recognize_and_callback(self, callback):
+        # Convert to numpy array for OpenCV
+        img_array = np.array(self.image)
         
-    def clear_drawing(self):
-        """Clear all drawing regions"""
-        for region in self.regions:
-            x1, y1, x2, y2 = region['coords']
-            self.canvas.create_rectangle(
-                x1, y1, x2, y2,
-                fill="white",
-                outline="blue"
-            )
+        # Preprocess
+        _, thresh = cv2.threshold(
+            img_array, 0, 255,
+            cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        )
         
-        self.region_images = [
-            Image.new('L', (x2-x1, y2-y1), 'white')
-            for x1, y1, x2, y2 in [r['coords'] for r in self.regions]
-        ]
+        # Perform OCR
+        text = pytesseract.image_to_string(
+            thresh,
+            config='--psm 10 --oem 3'
+        ).strip()
         
-    def process_and_save_flashcard(self):
-        """Process OCR and save flashcard"""
-        text = ""
-        for img in self.region_images:
-            # Preprocess image
-            img_array = np.array(img)
-            _, thresh = cv2.threshold(
-                img_array, 0, 255,
-                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-            )
-            
-            # Perform OCR
-            char = pytesseract.image_to_string(
-                thresh,
-                config='--psm 10 --oem 3'
-            ).strip()
-            text += char
-            
-        if text and self.current_image:
-            # Create new filename based on OCR text
-            new_name = f"{text}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            new_path = self.image_dir / new_name
-            
-            # Rename and move the image
-            os.rename(self.current_image, new_path)
-            logging.debug(f"Saved flashcard: {new_path}")
-            
-            # Show success message
-            self.show_message(f"Saved flashcard: {text}")
-            
-    def show_message(self, message, duration=2000):
-        """Show temporary message"""
-        msg_label = tk.Label(self.root, text=message)
-        msg_label.pack(pady=10)
-        self.root.after(duration, msg_label.destroy)
-        self.root.after(duration, self.show_main_menu)
-        
-    def show_flashcard_list(self):
-        """Show list of existing flashcards"""
-        self.clear_screen()
-        
-        # Create scrollable frame
-        container = tk.Frame(self.root)
-        container.pack(fill=tk.BOTH, expand=True)
-        
-        # Get list of flashcards
-        flashcards = sorted(self.image_dir.glob("*.jpg"))
-        
-        # Create button for each flashcard
-        for card_path in flashcards:
-            name = card_path.stem  # Remove extension
-            tk.Button(
-                container,
-                text=name,
-                command=lambda p=card_path: self.show_flashcard(p)
-            ).pack(fill=tk.X, padx=5, pady=2)
-            
-        tk.Button(
-            container,
-            text="Back",
-            command=self.show_main_menu
-        ).pack(pady=10)
-        
-    def show_flashcard(self, image_path):
-        """Display individual flashcard"""
-        self.clear_screen()
-        
-        # Load and resize image for display
-        image = Image.open(image_path)
-        image.thumbnail((self.screen_width - 20, self.screen_height - 60))
-        photo = ImageTk.PhotoImage(image)
-        
-        # Show image
-        label = tk.Label(self.root, image=photo)
-        label.image = photo  # Keep reference
-        label.pack(pady=10)
-        
-        # Back button
-        tk.Button(
-            self.root,
-            text="Back",
-            command=self.show_flashcard_list
-        ).pack(pady=5)
+        if text:
+            callback(text)
+    
+    def destroy(self):
+        self.frame.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
