@@ -9,11 +9,12 @@ import datetime
 import signal
 import logging
 from pathlib import Path
+import tkinter.messagebox
 
 class OCRScreen:
     def __init__(self, root, width, height, callback, back_callback):
         self.frame = tk.Frame(root)
-        self.frame.pack(expand=True)
+        self.frame.pack(expand=True, fill=tk.BOTH)
         
         # Create button frame FIRST and pack at BOTTOM
         button_frame = tk.Frame(self.frame)
@@ -25,35 +26,37 @@ class OCRScreen:
         button_font = ('Arial', 14)
         
         # Pack buttons from right to left to ensure visibility
-        tk.Button(
+        self.back_btn = tk.Button(
             button_frame,
             text="Back",
             command=back_callback,
             width=button_width,
             height=button_height,
             font=button_font
-        ).pack(side=tk.RIGHT, padx=5)
+        )
+        self.back_btn.pack(side=tk.RIGHT, padx=5)
         
-        tk.Button(
+        self.clear_btn = tk.Button(
             button_frame,
             text="Clear",
             command=self.clear_canvas,
             width=button_width,
             height=button_height,
             font=button_font
-        ).pack(side=tk.RIGHT, padx=5)
+        )
+        self.clear_btn.pack(side=tk.RIGHT, padx=5)
         
-        tk.Button(
+        self.recognize_btn = tk.Button(
             button_frame,
             text="Recognize",
             command=lambda: self.recognize_and_callback(callback),
             width=button_width,
             height=button_height,
             font=button_font
-        ).pack(side=tk.RIGHT, padx=5)
+        )
+        self.recognize_btn.pack(side=tk.RIGHT, padx=5)
         
         # Calculate canvas size to fit above buttons
-        # Leave room for OS header and button frame
         canvas_height = height - 100  # Reduced height to ensure buttons are visible
         canvas_width = width - 20     # Small margin on sides
         canvas_size = min(canvas_width, canvas_height)
@@ -67,85 +70,22 @@ class OCRScreen:
             highlightthickness=2,
             highlightbackground="blue"
         )
-        self.canvas.pack(pady=5)
+        self.canvas.pack(expand=True, padx=10, pady=5)
         
         # Drawing state
         self.drawing = False
         self.last_x = None
         self.last_y = None
         
-        # Create image buffer
-        self.image = Image.new('L', (canvas_size, canvas_size), 'white')
+        # Create image buffer with specific size
+        self.canvas_size = canvas_size
+        self.image = Image.new('L', (self.canvas_size, self.canvas_size), 'white')
         self.draw = ImageDraw.Draw(self.image)
         
-        # Bind events
+        # Bind mouse events
         self.canvas.bind("<Button-1>", self.start_drawing)
         self.canvas.bind("<B1-Motion>", self.draw_character)
         self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
-        self.frame = tk.Frame(root)
-        self.frame.pack(expand=True)
-        
-        # Drawing canvas for OCR
-        canvas_size = min(width, height) - 80
-        self.canvas = tk.Canvas(
-            self.frame,
-            width=canvas_size,
-            height=canvas_size,
-            bg="white",
-            highlightthickness=1,
-            highlightbackground="gray"
-        )
-        self.canvas.pack(pady=5)
-        
-        # Drawing state
-        self.drawing = False
-        self.last_x = None
-        self.last_y = None
-        
-        # Create image buffer
-        self.image = Image.new('L', (canvas_size, canvas_size), 'white')
-        self.draw = ImageDraw.Draw(self.image)
-        
-        # Bind events
-        self.canvas.bind("<Button-1>", self.start_drawing)
-        self.canvas.bind("<B1-Motion>", self.draw_character)
-        self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
-        
-        # Button frame
-        button_frame = tk.Frame(self.frame)
-        button_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        # Create buttons with consistent size
-        button_width = 8
-        button_height = 1
-        button_font = ('Arial', 12)
-        
-        tk.Button(
-            button_frame,
-            text="Recognize",
-            command=lambda: self.recognize_and_callback(callback),
-            width=button_width,
-            height=button_height,
-            font=button_font
-        ).pack(side=tk.LEFT, padx=2)
-        
-        tk.Button(
-            button_frame,
-            text="Clear",
-            command=self.clear_canvas,
-            width=button_width,
-            height=button_height,
-            font=button_font
-        ).pack(side=tk.LEFT, padx=2)
-        
-        tk.Button(
-            button_frame,
-            text="Back",
-            command=back_callback,
-            width=button_width,
-            height=button_height,
-            font=button_font
-        ).pack(side=tk.LEFT, padx=2)
     
     def start_drawing(self, event):
         self.drawing = True
@@ -153,26 +93,36 @@ class OCRScreen:
         self.last_y = event.y
     
     def draw_character(self, event):
-        if self.drawing:
+        if self.drawing and self.last_x is not None and self.last_y is not None:
+            # Draw on canvas
             self.canvas.create_line(
                 self.last_x, self.last_y,
                 event.x, event.y,
-                width=3
+                fill="black",
+                width=3,
+                smooth=True,
+                splinesteps=12
             )
+            
+            # Draw on image buffer
             self.draw.line(
                 [self.last_x, self.last_y, event.x, event.y],
                 fill="black",
-                width=3
+                width=3,
+                joint="curve"
             )
+            
             self.last_x = event.x
             self.last_y = event.y
     
     def stop_drawing(self, event):
         self.drawing = False
+        self.last_x = None
+        self.last_y = None
     
     def clear_canvas(self):
         self.canvas.delete("all")
-        self.image = Image.new('L', self.image.size, 'white')
+        self.image = Image.new('L', (self.canvas_size, self.canvas_size), 'white')
         self.draw = ImageDraw.Draw(self.image)
     
     def recognize_and_callback(self, callback):
@@ -193,6 +143,11 @@ class OCRScreen:
         
         if text:
             callback(text)
+        else:
+            tkinter.messagebox.showwarning(
+                "Recognition Failed",
+                "Could not recognize character. Please try again."
+            )
     
     def destroy(self):
         self.frame.destroy()
@@ -316,8 +271,7 @@ class FlashcardApp:
             self.current_image_path = image_path
             self.show_ocr_screen()
         else:
-            # Show error message
-            tk.messagebox.showerror(
+            tkinter.messagebox.showerror(
                 "Error",
                 "Failed to capture image. Please try again."
             )
