@@ -15,6 +15,76 @@ class OCRScreen:
         self.frame = tk.Frame(root)
         self.frame.pack(expand=True)
         
+        # Create button frame FIRST and pack at BOTTOM
+        button_frame = tk.Frame(self.frame)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
+        
+        # Create buttons with larger size for touch
+        button_width = 10
+        button_height = 2
+        button_font = ('Arial', 14)
+        
+        # Pack buttons from right to left to ensure visibility
+        tk.Button(
+            button_frame,
+            text="Back",
+            command=back_callback,
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.RIGHT, padx=5)
+        
+        tk.Button(
+            button_frame,
+            text="Clear",
+            command=self.clear_canvas,
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.RIGHT, padx=5)
+        
+        tk.Button(
+            button_frame,
+            text="Recognize",
+            command=lambda: self.recognize_and_callback(callback),
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.RIGHT, padx=5)
+        
+        # Calculate canvas size to fit above buttons
+        # Leave room for OS header and button frame
+        canvas_height = height - 100  # Reduced height to ensure buttons are visible
+        canvas_width = width - 20     # Small margin on sides
+        canvas_size = min(canvas_width, canvas_height)
+        
+        # Drawing canvas for OCR - pack AFTER buttons
+        self.canvas = tk.Canvas(
+            self.frame,
+            width=canvas_size,
+            height=canvas_size,
+            bg="white",
+            highlightthickness=2,
+            highlightbackground="blue"
+        )
+        self.canvas.pack(pady=5)
+        
+        # Drawing state
+        self.drawing = False
+        self.last_x = None
+        self.last_y = None
+        
+        # Create image buffer
+        self.image = Image.new('L', (canvas_size, canvas_size), 'white')
+        self.draw = ImageDraw.Draw(self.image)
+        
+        # Bind events
+        self.canvas.bind("<Button-1>", self.start_drawing)
+        self.canvas.bind("<B1-Motion>", self.draw_character)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
+        self.frame = tk.Frame(root)
+        self.frame.pack(expand=True)
+        
         # Drawing canvas for OCR
         canvas_size = min(width, height) - 80
         self.canvas = tk.Canvas(
@@ -132,10 +202,13 @@ class FlashcardApp:
         self.root = root
         self.root.title("Flashcard App")
         
-        # Configure for 3.5" TFT LCD (480x320 is common for these displays)
+        # Configure for 3.5" TFT LCD (480x320)
         self.screen_width = 480
         self.screen_height = 320
         self.root.geometry(f"{self.screen_width}x{self.screen_height}")
+        
+        # Force fullscreen and remove window decorations
+        self.root.attributes('-fullscreen', True)
         
         # Setup directories
         self.base_dir = Path("flashcards")
