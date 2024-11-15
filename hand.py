@@ -7,7 +7,6 @@ import os
 from datetime import datetime
 import logging
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class CharacterDrawingOCR:
     def __init__(self, root, num_regions=5, region_size=100):
