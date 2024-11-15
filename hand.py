@@ -11,7 +11,69 @@ import logging
 from pathlib import Path
 
 class FlashcardApp:
-    def __init__(self, root):
+    def __init__(self, root, width, height, callback, back_callback):
+        self.frame = tk.Frame(root)
+        self.frame.pack(expand=True, fill=tk.BOTH)
+        
+        # Drawing canvas for OCR - make it slightly smaller to ensure room for buttons
+        canvas_size = min(width, height) - 80  # Reduced size to ensure space for buttons
+        self.canvas = tk.Canvas(
+            self.frame,
+            width=canvas_size,
+            height=canvas_size,
+            bg="white"
+        )
+        self.canvas.pack(pady=5)  # Reduced padding
+        
+        # Drawing state
+        self.drawing = False
+        self.last_x = None
+        self.last_y = None
+        
+        # Create image buffer
+        self.image = Image.new('L', (canvas_size, canvas_size), 'white')
+        self.draw = ImageDraw.Draw(self.image)
+        
+        # Bind events
+        self.canvas.bind("<Button-1>", self.start_drawing)
+        self.canvas.bind("<B1-Motion>", self.draw_character)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
+        
+        # Button frame
+        button_frame = tk.Frame(self.frame)
+        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Create buttons with consistent size
+        button_width = 8  # Reduced width to fit all buttons
+        button_height = 1
+        button_font = ('Arial', 12)
+        
+        tk.Button(
+            button_frame,
+            text="Recognize",
+            command=lambda: self.recognize_and_callback(callback),
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.LEFT, padx=2)
+        
+        tk.Button(
+            button_frame,
+            text="Clear",
+            command=self.clear_canvas,
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.LEFT, padx=2)
+        
+        tk.Button(
+            button_frame,
+            text="Back",
+            command=back_callback,
+            width=button_width,
+            height=button_height,
+            font=button_font
+        ).pack(side=tk.LEFT, padx=2)
         self.root = root
         self.root.title("Flashcard App")
         
