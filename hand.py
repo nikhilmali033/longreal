@@ -207,7 +207,51 @@ class FlashcardApp:
             width=20
         )
     
+    # [Previous imports remain the same...]
+
+class FlashcardApp:
+    # [Previous methods remain the same until show_main_screen]
+    
     def show_main_screen(self):
+        """Display main menu"""
+        self.clear_screen()
+        
+        # Create main screen container
+        self.current_screen = tk.Frame(self.root)
+        self.current_screen.pack(fill=tk.BOTH, expand=True)
+        
+        # Create top frame for exit button
+        top_frame = tk.Frame(self.current_screen)
+        top_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Add X button in its own frame
+        exit_btn = tk.Button(
+            top_frame,
+            text="X",
+            command=self.root.quit,
+            font=('Arial', 16, 'bold'),
+            width=3,
+            height=1,
+            bg='red',
+            fg='white'
+        )
+        exit_btn.pack(side=tk.RIGHT)
+        
+        # Create center frame for main buttons
+        center_frame = tk.Frame(self.current_screen)
+        center_frame.pack(expand=True)
+        
+        self.create_button(
+            center_frame,
+            "New Flashcard",
+            self.start_new_flashcard
+        ).pack(pady=20)
+        
+        self.create_button(
+            center_frame,
+            "View Flashcards",
+            self.show_flashcard_list
+        ).pack(pady=20)
         """Display main menu"""
         self.clear_screen()
         self.current_screen = tk.Frame(self.root)
