@@ -254,6 +254,13 @@ class FlashcardApp:
         
         self.create_button(
             self.current_screen,
+            "Exit",
+            self.root.quit
+        ).pack(pady=20)
+        
+
+        self.create_button(
+            self.current_screen,
             "New Flashcard",
             self.start_new_flashcard
         ).pack(pady=20)
