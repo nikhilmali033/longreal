@@ -116,6 +116,7 @@ if __name__ == "__main__":
     menu.add_menu_item("Games")
     menu.add_menu_item("Games/Action")
     menu.add_menu_item("Games/Strategy")
+    
 
     # Add screenshot button component
     menu.add_component(ScreenshotButton())
