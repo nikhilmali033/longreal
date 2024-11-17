@@ -2,13 +2,313 @@ import tkinter as tk
 from tkinter import ttk
 import sys
 import subprocess
-import datetime
+from datetime import datetime
 import os
 import cv2
 from PIL import Image, ImageTk
 import threading
 import queue
+import numpy as np
+import cv2
+import pytesseract
+import logging
+from PIL import Image, ImageDraw
 
+#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+class CharacterOCRComponent:
+    def __init__(self, parent, num_regions=5, debug=True):
+        """Initialize the OCR component with the parent widget"""
+        self.parent = parent
+        self.frame = ttk.Frame(parent)
+        
+        # Initialize debug settings
+        self.debug = debug
+        if debug:
+            self.debug_folder = "ocr_debug"
+            os.makedirs(self.debug_folder, exist_ok=True)
+            logging.basicConfig(
+                filename='ocr_debug.log',
+                level=logging.DEBUG,
+                format='%(asctime)s - %(levelname)s - %(message)s'
+            )
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Adjust region size based on screen dimensions
+        self.region_size = min(int(self.screen_width * 0.15), int(self.screen_height * 0.2))
+        self.num_regions = num_regions
+        self.line_width = max(2, int(self.region_size * 0.03))  # Scaled line width
+        
+        self._create_ui()
+        self._setup_regions()
+        self._create_controls()
+        
+        # Initialize drawing state
+        self.drawing = False
+        self.current_region = None
+        self.last_x = None
+        self.last_y = None
+
+    def _create_ui(self):
+        """Create the main UI components"""
+        # Title
+        self.title_label = ttk.Label(
+            self.frame,
+            text="Character Recognition",
+            font=('Arial', int(self.screen_height * 0.03), 'bold')
+        )
+        self.title_label.pack(pady=10)
+
+        # Canvas container (to ensure proper centering)
+        canvas_container = ttk.Frame(self.frame)
+        canvas_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Main canvas with white background
+        self.canvas = tk.Canvas(
+            canvas_container,
+            highlightthickness=2,
+            highlightbackground="gray",
+            bg="white"
+        )
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Bind events
+        self.canvas.bind("<Button-1>", self._start_drawing)
+        self.canvas.bind("<B1-Motion>", self._draw)
+        self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
+
+    def _setup_regions(self):
+        """Create the character regions"""
+        self.regions = []
+        self.region_images = []
+        
+        # Calculate layout
+        total_width = self.num_regions * (self.region_size + 10)
+        start_x = (self.screen_width - total_width) // 2
+        start_y = (self.screen_height - self.region_size) // 2
+        
+        for i in range(self.num_regions):
+            x1 = start_x + i * (self.region_size + 10)
+            y1 = start_y
+            x2 = x1 + self.region_size
+            y2 = y1 + self.region_size
+            
+            # Create region rectangle with blue border
+            region = self.canvas.create_rectangle(
+                x1, y1, x2, y2,
+                outline="#2196F3",  # Material Blue
+                width=2
+            )
+            
+            # Store region info
+            self.regions.append({
+                'id': region,
+                'coords': (x1, y1, x2, y2)
+            })
+            
+            # Create image buffer
+            img = Image.new('L', (self.region_size, self.region_size), 'white')
+            self.region_images.append(img)
+            
+            if self.debug:
+                logging.debug(f"Created region {i} at ({x1}, {y1}, {x2}, {y2})")
+
+    def _create_controls(self):
+        """Create control buttons"""
+        control_frame = ttk.Frame(self.frame)
+        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+        
+        # Button style matching your Flashcard app
+        button_width = int(self.screen_width * 0.15)
+        button_height = int(self.screen_height * 0.06)
+        
+        # Recognize button
+        self.recognize_btn = RoundedButton(
+            control_frame,
+            text="Recognize",
+            command=self.recognize_characters,
+            width=button_width,
+            height=button_height,
+            bg_color="#4CAF50"  # Green
+        )
+        self.recognize_btn.pack(side=tk.LEFT, padx=10)
+        
+        # Clear button
+        self.clear_btn = RoundedButton(
+            control_frame,
+            text="Clear All",
+            command=self.clear_all,
+            width=button_width,
+            height=button_height,
+            bg_color="#f44336"  # Red
+        )
+        self.clear_btn.pack(side=tk.RIGHT, padx=10)
+
+    def _start_drawing(self, event):
+        """Handle drawing start"""
+        self.drawing = False
+        self.current_region = None
+        
+        # Check which region was clicked
+        for i, region in enumerate(self.regions):
+            x1, y1, x2, y2 = region['coords']
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self.drawing = True
+                self.current_region = i
+                self.last_x = event.x - x1
+                self.last_y = event.y - y1
+                
+                if self.debug:
+                    logging.debug(f"Started drawing in region {i}")
+                break
+
+    def _draw(self, event):
+        """Handle drawing motion"""
+        if not self.drawing or self.current_region is None:
+            return
+            
+        region = self.regions[self.current_region]
+        x1, y1, x2, y2 = region['coords']
+        
+        if not (x1 <= event.x <= x2 and y1 <= event.y <= y2):
+            return
+            
+        curr_x = event.x - x1
+        curr_y = event.y - y1
+        
+        # Draw on canvas
+        self.canvas.create_line(
+            event.x, event.y,
+            self.last_x + x1, self.last_y + y1,
+            width=self.line_width,
+            fill="black",
+            capstyle=tk.ROUND,
+            smooth=True
+        )
+        
+        # Draw on image buffer
+        draw = ImageDraw.Draw(self.region_images[self.current_region])
+        draw.line(
+            [self.last_x, self.last_y, curr_x, curr_y],
+            fill="black",
+            width=self.line_width
+        )
+        
+        self.last_x = curr_x
+        self.last_y = curr_y
+
+    def _stop_drawing(self, event):
+        """Handle drawing end"""
+        if self.drawing and self.current_region is not None and self.debug:
+            logging.debug(f"Stopped drawing in region {self.current_region}")
+        self.drawing = False
+
+    def clear_all(self):
+        """Clear all regions"""
+        for region in self.regions:
+            coords = region['coords']
+            self.canvas.create_rectangle(
+                coords[0], coords[1], coords[2], coords[3],
+                fill="white",
+                outline="#2196F3",
+                width=2
+            )
+        
+        self.region_images = [
+            Image.new('L', (self.region_size, self.region_size), 'white')
+            for _ in range(self.num_regions)
+        ]
+        
+        if self.debug:
+            logging.debug("Cleared all regions")
+
+    def recognize_characters(self):
+        """Perform OCR on each region"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results = []
+        
+        for i, img in enumerate(self.region_images):
+            # Preprocess image
+            img_array = np.array(img)
+            _, thresh = cv2.threshold(
+                img_array, 0, 255,
+                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
+            
+            if self.debug:
+                debug_path = os.path.join(
+                    self.debug_folder,
+                    f"region_{i}_{timestamp}.png"
+                )
+                cv2.imwrite(debug_path, thresh)
+                logging.debug(f"Saved debug image for region {i} to {debug_path}")
+            
+            # Perform OCR
+            text = pytesseract.image_to_string(
+                thresh,
+                config='--psm 10 --oem 3'  # PSM 10 for single character
+            ).strip()
+            
+            results.append(text)
+            if self.debug:
+                logging.debug(f"Region {i} recognized as: '{text}'")
+        
+        # Display results in a styled dialog
+        self._show_results(results)
+
+    def _show_results(self, results):
+        """Show recognition results in a styled dialog"""
+        dialog = tk.Toplevel(self.parent)
+        dialog.title("Recognition Results")
+        
+        # Calculate size and position
+        width = int(self.screen_width * 0.3)
+        height = int(self.screen_height * 0.4)
+        x = (self.screen_width - width) // 2
+        y = (self.screen_height - height) // 2
+        
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Title
+        ttk.Label(
+            dialog,
+            text="Recognition Results",
+            font=('Arial', int(self.screen_height * 0.03), 'bold')
+        ).pack(pady=20)
+        
+        # Results
+        for i, text in enumerate(results):
+            ttk.Label(
+                dialog,
+                text=f"Character {i + 1}: {text}",
+                font=('Arial', int(self.screen_height * 0.02))
+            ).pack(pady=5)
+        
+        # Close button
+        close_btn = RoundedButton(
+            dialog,
+            text="Close",
+            command=dialog.destroy,
+            width=int(width * 0.4),
+            height=int(height * 0.15),
+            bg_color="#666666"
+        )
+        close_btn.pack(pady=20)
+
+    def pack(self, **kwargs):
+        """Pack the frame with the given options"""
+        self.frame.pack(**kwargs)
+
+    def grid(self, **kwargs):
+        """Grid the frame with the given options"""
+        self.frame.grid(**kwargs)
+
+    def destroy(self):
+        """Clean up resources"""
+        self.frame.destroy()
 class Component:
     """Base component class"""
     def __init__(self, parent, **kwargs):
@@ -384,6 +684,11 @@ class FlashcardApp:
         
         buttons = [
             {
+                'text': "Take balls",
+                'command': self.show_ocr,
+                'color': "#4CAF50"
+            },
+            {
                 'text': "Take Picture",
                 'command': self.show_camera_preview,
                 'color': "#4CAF50"
@@ -455,6 +760,17 @@ class FlashcardApp:
         print(f"Image captured: {image_path}")
         # Here you could add additional processing, like displaying the image
         # or automatically switching to the image list view
+
+    def show_ocr(self):
+        self.clear_container()
+        self.create_back_button()
+        
+        self.current_component = CharacterOCRComponent(
+            self.container,
+            num_regions=5,
+            debug=True
+        )
+        self.current_component.pack(fill='both', expand=True)
 
 def main():
     root = tk.Tk()
