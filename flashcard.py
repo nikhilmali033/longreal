@@ -120,15 +120,14 @@ class RoundedButton(Component):
     def _on_click(self, event):
         if self.enabled:
             self.command()
-
 class CameraPreview(Component):
-    """Camera preview component with capture functionality"""
+    """Camera preview component that strictly follows capture.py implementation"""
     def __init__(self, parent, callback=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.preview_active = False
-        self.frame_queue = queue.Queue(maxsize=1)
         self.output_dir = "captured_images"
         self.callback = callback
+        self.preview_process = None
         
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -136,120 +135,88 @@ class CameraPreview(Component):
         self._create_ui()
         
     def _create_ui(self):
-        # Calculate preview dimensions
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
-        self.preview_width = int(screen_width * 0.7)
-        self.preview_height = int(screen_height * 0.6)
-        
-        # Create preview canvas
-        self.preview_canvas = tk.Canvas(
-            self.frame,
-            width=self.preview_width,
-            height=self.preview_height,
-            bg='black',
-            highlightthickness=0
-        )
-        self.preview_canvas.pack(pady=20)
+        # Create control frame for button
+        self.control_frame = ttk.Frame(self.frame)
+        self.control_frame.pack(pady=20)
         
         # Create capture button
         self.capture_btn = RoundedButton(
-            self.frame,
+            self.control_frame,
             text="Capture",
             command=self.capture_image,
             bg_color="#4CAF50"
         )
         self.capture_btn.pack(pady=20)
         
-        self.start_preview()
+        # Start preview when UI is ready
+        self.frame.after(100, self.start_preview)
     
     def start_preview(self):
-        self.preview_active = True
-        self.preview_process = subprocess.Popen([
-            "libcamera-vid",
-            "--width", "2304",
-            "--height", "1296",
-            "--codec", "mjpeg",
-            "--inline",
-            "--output", "-"
-        ], stdout=subprocess.PIPE)
-        
-        self.preview_thread = threading.Thread(target=self._read_preview_frames)
-        self.preview_thread.daemon = True
-        self.preview_thread.start()
-        
-        self._update_preview()
+        """Start the preview window using libcamera-hello"""
+        if self.preview_process is None:
+            try:
+                self.preview_active = True
+                self.preview_process = subprocess.Popen([
+                    "libcamera-hello",
+                    "--qt",  # Essential qt flag
+                    "--width", "2304",
+                    "--height", "1296"
+                ])
+            except subprocess.CalledProcessError as e:
+                print(f"Error starting preview: {e}")
     
-    def _read_preview_frames(self):
-        cap = cv2.VideoCapture()
-        cap.open(f"pipe:{self.preview_process.stdout.fileno()}")
-        
-        while self.preview_active:
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.resize(frame, (self.preview_width, self.preview_height))
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image = Image.fromarray(frame)
-                photo = ImageTk.PhotoImage(image)
-                
-                try:
-                    self.frame_queue.get_nowait()
-                except queue.Empty:
-                    pass
-                self.frame_queue.put(photo)
-    
-    def _update_preview(self):
-        try:
-            photo = self.frame_queue.get_nowait()
-            self.preview_canvas.delete("all")
-            self.preview_canvas.create_image(
-                self.preview_width/2,
-                self.preview_height/2,
-                image=photo,
-                anchor='center'
-            )
-            self.preview_canvas.photo = photo
-        except queue.Empty:
-            pass
-        
-        if self.preview_active:
-            self.frame.after(30, self._update_preview)
+    def stop_preview(self):
+        """Stop the preview window"""
+        if self.preview_process:
+            self.preview_active = False
+            self.preview_process.terminate()
+            try:
+                self.preview_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.preview_process.kill()
+            self.preview_process = None
     
     def capture_image(self):
+        """Capture an image following the exact capture.py implementation"""
+        # Temporarily stop the preview
+        self.stop_preview()
+        
+        # Generate filename with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{self.output_dir}/image_{timestamp}.jpg"
         
         try:
-            self.preview_active = False
-            if hasattr(self, 'preview_process'):
-                self.preview_process.terminate()
-                self.preview_process.wait()
-            
-            subprocess.run([
+            # Using exact command from capture.py
+            cmd = [
                 "libcamera-jpeg",
                 "-o", filename,
                 "--width", "2304",
-                "--height", "1296"
-            ], check=True)
+                "--height", "1296",
+                "--qt",  # Essential qt flag
+                "--nopreview"  # Since we don't need preview for capture
+            ]
             
+            subprocess.run(cmd, check=True)
+            print(f"Image captured successfully: {filename}")
+            
+            # Call the callback with the captured image path
             if self.callback:
                 self.callback(filename)
             
+            # Restart the preview
             self.start_preview()
             return filename
             
         except subprocess.CalledProcessError as e:
             print(f"Error capturing image: {e}")
+            # Restart the preview even if capture failed
             self.start_preview()
             return None
     
     def destroy(self):
-        self.preview_active = False
-        if hasattr(self, 'preview_process'):
-            self.preview_process.terminate()
-            self.preview_process.wait()
+        """Clean up resources when component is destroyed"""
+        self.stop_preview()
         super().destroy()
-
 class ImageList(Component):
     """Component to display captured images as a scrollable list"""
     def __init__(self, parent, image_dir="captured_images", **kwargs):
@@ -363,7 +330,6 @@ class ImageList(Component):
     def _view_image(self, image_path):
         # For now, just print the path - we'll implement viewing later
         print(f"Viewing image: {image_path}")
-
 class FlashcardApp:
     """Main application class"""
     def __init__(self, root):
