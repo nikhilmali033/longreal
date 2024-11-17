@@ -121,7 +121,7 @@ class RoundedButton(Component):
         if self.enabled:
             self.command()
 class CameraPreview(Component):
-    """Camera preview component with Qt preview and capture functionality"""
+    """Camera preview component that strictly follows capture.py implementation"""
     def __init__(self, parent, callback=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.preview_active = False
@@ -152,23 +152,21 @@ class CameraPreview(Component):
         self.frame.after(100, self.start_preview)
     
     def start_preview(self):
-        """Start the Qt preview window"""
+        """Start the preview window using libcamera-hello"""
         if self.preview_process is None:
             try:
                 self.preview_active = True
                 self.preview_process = subprocess.Popen([
-                    "libcamera-vid",
-                    "--qt-preview",
+                    "libcamera-hello",
+                    "--qt",  # Essential qt flag
                     "--width", "2304",
-                    "--height", "1296",
-                    "--timeout", "0",  # Run indefinitely
-                    "--nopreview"  # Disable the default preview
+                    "--height", "1296"
                 ])
             except subprocess.CalledProcessError as e:
                 print(f"Error starting preview: {e}")
     
     def stop_preview(self):
-        """Stop the Qt preview window"""
+        """Stop the preview window"""
         if self.preview_process:
             self.preview_active = False
             self.preview_process.terminate()
@@ -179,28 +177,32 @@ class CameraPreview(Component):
             self.preview_process = None
     
     def capture_image(self):
-        """Capture an image using libcamera-jpeg"""
+        """Capture an image following the exact capture.py implementation"""
         # Temporarily stop the preview
         self.stop_preview()
         
-        # Generate timestamp and filename
+        # Generate filename with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{self.output_dir}/image_{timestamp}.jpg"
         
         try:
-            # Capture image using libcamera-jpeg
-            subprocess.run([
+            # Using exact command from capture.py
+            cmd = [
                 "libcamera-jpeg",
                 "-o", filename,
                 "--width", "2304",
                 "--height", "1296",
-                "--qt-preview"  # Show preview during capture
-            ], check=True)
+                "--qt",  # Essential qt flag
+                "--nopreview"  # Since we don't need preview for capture
+            ]
+            
+            subprocess.run(cmd, check=True)
+            print(f"Image captured successfully: {filename}")
             
             # Call the callback with the captured image path
             if self.callback:
                 self.callback(filename)
-                
+            
             # Restart the preview
             self.start_preview()
             return filename
