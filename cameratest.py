@@ -23,7 +23,7 @@ class WorkingCameraPreview:
     def _create_ui(self):
         # Main container with dark theme
         style = ttk.Style()
-        style.configure('Preview.TFrame', background='#2a2a2a')
+        style.configure('Preview.TFrame')
         
         # Status frame
         self.status_frame = ttk.Frame(self.frame)
