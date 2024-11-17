@@ -23,21 +23,23 @@ class WorkingCameraPreview:
     def _create_ui(self):
         # Main container with dark theme
         style = ttk.Style()
-        style.configure('Preview.TFrame')
+        style.configure('Preview.TFrame', background='#2a2a2a')
         
         # Status frame
         self.status_frame = ttk.Frame(self.frame)
         self.status_frame.pack(fill=tk.X, pady=10, padx=10)
         
-        # Status indicator (circle)
+        # Status indicator (circle) - using system background color
         self.canvas = tk.Canvas(
             self.status_frame,
             width=20,
             height=20,
-            bg=self.frame.cget('background'),
             highlightthickness=0
         )
         self.canvas.pack(side=tk.LEFT, padx=5)
+        
+        # Configure canvas background to match parent
+        self.canvas.configure(bg=self.status_frame.winfo_toplevel().cget('bg'))
         
         self.status_indicator = self.canvas.create_oval(
             5, 5, 15, 15,
