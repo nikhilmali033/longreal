@@ -1,0 +1,75 @@
+2024-11-16 22:59:10,303 - DEBUG - Created region 0 at (313, 346, 485, 518)
+2024-11-16 22:59:10,303 - DEBUG - Created region 1 at (495, 346, 667, 518)
+2024-11-16 22:59:10,303 - DEBUG - Created region 2 at (677, 346, 849, 518)
+2024-11-16 22:59:10,303 - DEBUG - Created region 3 at (859, 346, 1031, 518)
+2024-11-16 22:59:10,304 - DEBUG - Created region 4 at (1041, 346, 1213, 518)
+2024-11-16 22:59:11,371 - DEBUG - Started drawing in region 0
+2024-11-16 22:59:12,357 - DEBUG - Stopped drawing in region 0
+2024-11-16 22:59:12,906 - DEBUG - Started drawing in region 0
+2024-11-16 22:59:13,427 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:02:37,168 - DEBUG - Created region 0 at (313, 346, 485, 518)
+2024-11-16 23:02:37,169 - DEBUG - Created region 1 at (495, 346, 667, 518)
+2024-11-16 23:02:37,169 - DEBUG - Created region 2 at (677, 346, 849, 518)
+2024-11-16 23:02:37,169 - DEBUG - Created region 3 at (859, 346, 1031, 518)
+2024-11-16 23:02:37,169 - DEBUG - Created region 4 at (1041, 346, 1213, 518)
+2024-11-16 23:02:37,885 - DEBUG - Started drawing in region 0
+2024-11-16 23:02:38,485 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:02:39,105 - DEBUG - Started drawing in region 0
+2024-11-16 23:02:39,705 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:02:40,526 - DEBUG - Saved debug image for region 0 to ocr_debug\region_0_20241116_230240.png
+2024-11-16 23:02:40,580 - DEBUG - ['tesseract', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_95x5yr6r_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_95x5yr6r', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:03:18,350 - DEBUG - Created region 0 at (313, 346, 485, 518)
+2024-11-16 23:03:18,350 - DEBUG - Created region 1 at (495, 346, 667, 518)
+2024-11-16 23:03:18,350 - DEBUG - Created region 2 at (677, 346, 849, 518)
+2024-11-16 23:03:18,351 - DEBUG - Created region 3 at (859, 346, 1031, 518)
+2024-11-16 23:03:18,351 - DEBUG - Created region 4 at (1041, 346, 1213, 518)
+2024-11-16 23:03:19,098 - DEBUG - Saved debug image for region 0 to ocr_debug\region_0_20241116_230319.png
+2024-11-16 23:03:19,120 - DEBUG - ['C:\\Users\\nicks\\AppData\\Local\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_izww_e93_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_izww_e93', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:23,632 - DEBUG - Created region 0 at (313, 346, 485, 518)
+2024-11-16 23:04:23,632 - DEBUG - Created region 1 at (495, 346, 667, 518)
+2024-11-16 23:04:23,632 - DEBUG - Created region 2 at (677, 346, 849, 518)
+2024-11-16 23:04:23,632 - DEBUG - Created region 3 at (859, 346, 1031, 518)
+2024-11-16 23:04:23,632 - DEBUG - Created region 4 at (1041, 346, 1213, 518)
+2024-11-16 23:04:24,292 - DEBUG - Started drawing in region 0
+2024-11-16 23:04:24,402 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:04:24,620 - DEBUG - Started drawing in region 0
+2024-11-16 23:04:24,758 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:04:25,429 - DEBUG - Saved debug image for region 0 to ocr_debug\region_0_20241116_230425.png
+2024-11-16 23:04:25,450 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_y8zp2au6_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_y8zp2au6', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:25,912 - DEBUG - Region 0 recognized as: '_'
+2024-11-16 23:04:25,912 - DEBUG - Saved debug image for region 1 to ocr_debug\region_1_20241116_230425.png
+2024-11-16 23:04:25,914 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_hkpewacr_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_hkpewacr', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:26,044 - DEBUG - Region 1 recognized as: '_'
+2024-11-16 23:04:26,045 - DEBUG - Saved debug image for region 2 to ocr_debug\region_2_20241116_230425.png
+2024-11-16 23:04:26,047 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_sa4xnck5_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_sa4xnck5', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:26,180 - DEBUG - Region 2 recognized as: '_'
+2024-11-16 23:04:26,180 - DEBUG - Saved debug image for region 3 to ocr_debug\region_3_20241116_230425.png
+2024-11-16 23:04:26,181 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_4mdhp46t_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_4mdhp46t', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:26,312 - DEBUG - Region 3 recognized as: '_'
+2024-11-16 23:04:26,313 - DEBUG - Saved debug image for region 4 to ocr_debug\region_4_20241116_230425.png
+2024-11-16 23:04:26,314 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_wuschojh_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_wuschojh', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:26,447 - DEBUG - Region 4 recognized as: '_'
+2024-11-16 23:04:28,990 - DEBUG - Started drawing in region 0
+2024-11-16 23:04:29,891 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:04:30,527 - DEBUG - Started drawing in region 0
+2024-11-16 23:04:30,978 - DEBUG - Stopped drawing in region 0
+2024-11-16 23:04:31,687 - DEBUG - Started drawing in region 1
+2024-11-16 23:04:32,045 - DEBUG - Stopped drawing in region 1
+2024-11-16 23:04:32,747 - DEBUG - Started drawing in region 1
+2024-11-16 23:04:34,011 - DEBUG - Stopped drawing in region 1
+2024-11-16 23:04:34,622 - DEBUG - Saved debug image for region 0 to ocr_debug\region_0_20241116_230434.png
+2024-11-16 23:04:34,626 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_4nmlosqr_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_4nmlosqr', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:34,775 - DEBUG - Region 0 recognized as: 'A'
+2024-11-16 23:04:34,776 - DEBUG - Saved debug image for region 1 to ocr_debug\region_1_20241116_230434.png
+2024-11-16 23:04:34,777 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ztic2eok_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ztic2eok', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:34,912 - DEBUG - Region 1 recognized as: ''
+2024-11-16 23:04:34,913 - DEBUG - Saved debug image for region 2 to ocr_debug\region_2_20241116_230434.png
+2024-11-16 23:04:34,915 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_wlgnxkcm_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_wlgnxkcm', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:35,042 - DEBUG - Region 2 recognized as: '_'
+2024-11-16 23:04:35,042 - DEBUG - Saved debug image for region 3 to ocr_debug\region_3_20241116_230434.png
+2024-11-16 23:04:35,044 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_3crfvdjf_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_3crfvdjf', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:35,176 - DEBUG - Region 3 recognized as: '_'
+2024-11-16 23:04:35,176 - DEBUG - Saved debug image for region 4 to ocr_debug\region_4_20241116_230434.png
+2024-11-16 23:04:35,178 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ruf6yn9r_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ruf6yn9r', '--psm', '10', '--oem', '3', 'txt']
+2024-11-16 23:04:35,308 - DEBUG - Region 4 recognized as: '_'
+2024-11-16 23:04:39,093 - DEBUG - Cleared all regions
