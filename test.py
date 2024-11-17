@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 import sys
 import subprocess
-import datetime
+from datetime import datetime
 import os
 import cv2
 from PIL import Image, ImageTk
@@ -13,6 +13,8 @@ import cv2
 import pytesseract
 import logging
 from PIL import Image, ImageDraw
+
+#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class CharacterOCRComponent:
     def __init__(self, parent, num_regions=5, debug=True):
