@@ -1,56 +1,20 @@
 import tkinter as tk
 from tkinter import ttk
 import sys
+import subprocess
+import datetime
 import os
-
-class ScreenManager:
-    """Handles screen rotation and dimensions"""
-    @staticmethod
-    def setup_screen_rotation():
-        # Try to rotate screen using xrandr if available
-        try:
-            # Check if we're on Linux/Pi
-            if os.name == 'posix':
-                # Get the primary display
-                import subprocess
-                output = subprocess.check_output(['xrandr', '--current']).decode()
-                primary_display = None
-                for line in output.split('\n'):
-                    if ' connected' in line and 'primary' in line:
-                        primary_display = line.split()[0]
-                        break
-                    elif ' connected' in line:  # fallback if no primary is specified
-                        primary_display = line.split()[0]
-                        break
-                
-                if primary_display:
-                    # Rotate the display
-                    subprocess.run(['xrandr', '--output', primary_display, '--rotate', 'right'])
-                    return True
-        except Exception as e:
-            print(f"Screen rotation failed: {e}")
-            return False
-        return False
-
-    @staticmethod
-    def get_rotated_dimensions(root):
-        """Get screen dimensions accounting for rotation"""
-        # Get actual screen dimensions
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
-        
-        # For 90-degree rotation, swap width and height
-        return screen_height, screen_width
+import cv2
+from PIL import Image, ImageTk
+import threading
+import queue
 
 class Component:
+    """Base component class"""
     def __init__(self, parent, **kwargs):
         self.parent = parent
         self.frame = ttk.Frame(parent)
         self.kwargs = kwargs
-        self.widgets = {}
-    
-    def render(self):
-        pass
     
     def pack(self, **pack_options):
         self.frame.pack(**pack_options)
@@ -60,6 +24,9 @@ class Component:
     
     def place(self, **place_options):
         self.frame.place(**place_options)
+    
+    def destroy(self):
+        self.frame.destroy()
 
 class RoundedButton(Component):
     """A button with rounded corners and customizable colors"""
@@ -73,17 +40,17 @@ class RoundedButton(Component):
         self.bg_color = bg_color
         self.hover_color = hover_color
         self.text_color = text_color
+        self.disabled_color = "#cccccc"
+        self.enabled = True
         
-        # Get rotated screen dimensions
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(parent)
-        
-        # Default sizes as proportions of rotated screen size
-        self.width = width or int(screen_width * 0.15)
-        self.height = height or int(screen_height * 0.08)
+        # Default sizes based on screen size
+        self.width = width or int(parent.winfo_screenwidth() * 0.15)
+        self.height = height or int(parent.winfo_screenheight() * 0.08)
         self.corner_radius = corner_radius
-        self.render()
+        
+        self._create_button()
 
-    def render(self):
+    def _create_button(self):
         # Create canvas with transparent background
         self.canvas = tk.Canvas(
             self.frame,
@@ -95,14 +62,14 @@ class RoundedButton(Component):
         self.canvas.pack()
 
         # Create rounded rectangle
-        self.shape = self.create_rounded_rectangle(
+        self.shape = self._create_rounded_rectangle(
             2, 2, self.width-2, self.height-2,
             self.corner_radius
         )
         self.canvas.itemconfig(self.shape, fill=self.bg_color, outline=self.bg_color)
         
-        # Create text with responsive font size
-        font_size = int(self.height * 0.3)  # Increased font size proportion
+        # Create text
+        font_size = int(self.height * 0.3)
         self.canvas_text = self.canvas.create_text(
             self.width/2,
             self.height/2,
@@ -116,7 +83,7 @@ class RoundedButton(Component):
         self.canvas.bind('<Leave>', self._on_leave)
         self.canvas.bind('<Button-1>', self._on_click)
 
-    def create_rounded_rectangle(self, x1, y1, x2, y2, radius):
+    def _create_rounded_rectangle(self, x1, y1, x2, y2, radius):
         points = [
             x1 + radius, y1,
             x2 - radius, y1,
@@ -132,82 +99,303 @@ class RoundedButton(Component):
             x1, y1
         ]
         return self.canvas.create_polygon(points, smooth=True)
-        
+
+    def set_enabled(self, enabled: bool):
+        self.enabled = enabled
+        self.canvas.itemconfig(
+            self.shape,
+            fill=self.bg_color if enabled else self.disabled_color
+        )
+
     def _on_enter(self, event):
-        self.canvas.itemconfig(self.shape, fill=self.hover_color)
+        if self.enabled:
+            self.canvas.itemconfig(self.shape, fill=self.hover_color)
 
     def _on_leave(self, event):
-        self.canvas.itemconfig(self.shape, fill=self.bg_color)
+        if self.enabled:
+            self.canvas.itemconfig(self.shape, fill=self.bg_color)
+        else:
+            self.canvas.itemconfig(self.shape, fill=self.disabled_color)
 
     def _on_click(self, event):
-        self.command()
+        if self.enabled:
+            self.command()
 
-class TextEditor(Component):
-    def __init__(self, parent, **kwargs):
+class CameraPreview(Component):
+    """Camera preview component with capture functionality"""
+    def __init__(self, parent, callback=None, **kwargs):
         super().__init__(parent, **kwargs)
-        self.render()
-    
-    def render(self):
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(self.parent)
-        initial_font_size = int(screen_height * 0.03)  # Increased font size
+        self.preview_active = False
+        self.frame_queue = queue.Queue(maxsize=1)
+        self.output_dir = "captured_images"
+        self.callback = callback
         
-        self.text_widget = tk.Text(
-            self.frame,
-            wrap='word',
-            font=('Arial', initial_font_size),
-            padx=20,  # Increased padding
-            pady=20
-        )
-        scrollbar = ttk.Scrollbar(
-            self.frame,
-            orient='vertical',
-            command=self.text_widget.yview
-        )
-        self.text_widget.configure(yscrollcommand=scrollbar.set)
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+            
+        self._create_ui()
         
-        scrollbar.pack(side='right', fill='y')
-        self.text_widget.pack(side='left', fill='both', expand=True)
+    def _create_ui(self):
+        # Calculate preview dimensions
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
+        self.preview_width = int(screen_width * 0.7)
+        self.preview_height = int(screen_height * 0.6)
+        
+        # Create preview canvas
+        self.preview_canvas = tk.Canvas(
+            self.frame,
+            width=self.preview_width,
+            height=self.preview_height,
+            bg='black',
+            highlightthickness=0
+        )
+        self.preview_canvas.pack(pady=20)
+        
+        # Create capture button
+        self.capture_btn = RoundedButton(
+            self.frame,
+            text="Capture",
+            command=self.capture_image,
+            bg_color="#4CAF50"
+        )
+        self.capture_btn.pack(pady=20)
+        
+        self.start_preview()
     
-    def get_text(self):
-        return self.text_widget.get('1.0', 'end-1c')
+    def start_preview(self):
+        self.preview_active = True
+        self.preview_process = subprocess.Popen([
+            "libcamera-vid",
+            "--width", "2304",
+            "--height", "1296",
+            "--codec", "mjpeg",
+            "--inline",
+            "--output", "-"
+        ], stdout=subprocess.PIPE)
+        
+        self.preview_thread = threading.Thread(target=self._read_preview_frames)
+        self.preview_thread.daemon = True
+        self.preview_thread.start()
+        
+        self._update_preview()
     
-    def set_text(self, text):
-        self.text_widget.delete('1.0', 'end')
-        self.text_widget.insert('1.0', text)
+    def _read_preview_frames(self):
+        cap = cv2.VideoCapture()
+        cap.open(f"pipe:{self.preview_process.stdout.fileno()}")
+        
+        while self.preview_active:
+            ret, frame = cap.read()
+            if ret:
+                frame = cv2.resize(frame, (self.preview_width, self.preview_height))
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(frame)
+                photo = ImageTk.PhotoImage(image)
+                
+                try:
+                    self.frame_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                self.frame_queue.put(photo)
+    
+    def _update_preview(self):
+        try:
+            photo = self.frame_queue.get_nowait()
+            self.preview_canvas.delete("all")
+            self.preview_canvas.create_image(
+                self.preview_width/2,
+                self.preview_height/2,
+                image=photo,
+                anchor='center'
+            )
+            self.preview_canvas.photo = photo
+        except queue.Empty:
+            pass
+        
+        if self.preview_active:
+            self.frame.after(30, self._update_preview)
+    
+    def capture_image(self):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{self.output_dir}/image_{timestamp}.jpg"
+        
+        try:
+            self.preview_active = False
+            if hasattr(self, 'preview_process'):
+                self.preview_process.terminate()
+                self.preview_process.wait()
+            
+            subprocess.run([
+                "libcamera-jpeg",
+                "-o", filename,
+                "--width", "2304",
+                "--height", "1296"
+            ], check=True)
+            
+            if self.callback:
+                self.callback(filename)
+            
+            self.start_preview()
+            return filename
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error capturing image: {e}")
+            self.start_preview()
+            return None
+    
+    def destroy(self):
+        self.preview_active = False
+        if hasattr(self, 'preview_process'):
+            self.preview_process.terminate()
+            self.preview_process.wait()
+        super().destroy()
 
-class MenuApp:
+class ImageList(Component):
+    """Component to display captured images as a scrollable list"""
+    def __init__(self, parent, image_dir="captured_images", **kwargs):
+        super().__init__(parent, **kwargs)
+        self.image_dir = image_dir
+        self.current_page = 0
+        self.images_per_page = 4
+        self._create_ui()
+        self.refresh_images()
+
+    def _create_ui(self):
+        # Navigation buttons container
+        nav_frame = ttk.Frame(self.frame)
+        nav_frame.pack(side='right', fill='y', padx=20)
+
+        # Calculate button sizes
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
+        nav_button_width = int(screen_width * 0.08)
+        nav_button_height = int(screen_height * 0.15)
+
+        # Navigation buttons
+        self.up_button = RoundedButton(
+            nav_frame,
+            text="▲",
+            command=self._previous_page,
+            width=nav_button_width,
+            height=nav_button_height,
+            bg_color="#666666"
+        )
+        self.up_button.pack(pady=(0, 10))
+
+        self.page_indicator = ttk.Label(
+            nav_frame,
+            text="1/1",
+            font=('Arial', int(screen_height * 0.03), 'bold')
+        )
+        self.page_indicator.pack(pady=10)
+
+        self.down_button = RoundedButton(
+            nav_frame,
+            text="▼",
+            command=self._next_page,
+            width=nav_button_width,
+            height=nav_button_height,
+            bg_color="#666666"
+        )
+        self.down_button.pack(pady=(10, 0))
+
+        # Images container
+        self.images_frame = ttk.Frame(self.frame)
+        self.images_frame.pack(side='left', fill='both', expand=True)
+
+    def refresh_images(self):
+        if os.path.exists(self.image_dir):
+            self.image_files = sorted(
+                [f for f in os.listdir(self.image_dir) if f.endswith('.jpg')],
+                reverse=True
+            )
+            self.total_pages = (len(self.image_files) + self.images_per_page - 1) // self.images_per_page
+            self._show_current_page()
+        else:
+            self.image_files = []
+            self.total_pages = 1
+            self._show_current_page()
+
+    def _show_current_page(self):
+        # Clear current images
+        for widget in self.images_frame.winfo_children():
+            widget.destroy()
+
+        # Calculate dimensions
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
+        button_width = int(screen_width * 0.4)
+        button_height = int(screen_height * 0.18)
+
+        # Get current page images
+        start_idx = self.current_page * self.images_per_page
+        end_idx = start_idx + self.images_per_page
+        current_images = self.image_files[start_idx:end_idx]
+
+        # Create image buttons
+        for image_file in current_images:
+            image_path = os.path.join(self.image_dir, image_file)
+            btn = RoundedButton(
+                self.images_frame,
+                text=image_file,
+                command=lambda p=image_path: self._view_image(p),
+                width=button_width,
+                height=button_height,
+                bg_color="#4287f5"
+            )
+            btn.pack(pady=10, padx=30)
+
+        # Update navigation
+        self.page_indicator.configure(text=f"{self.current_page + 1}/{max(1, self.total_pages)}")
+        self.up_button.set_enabled(self.current_page > 0)
+        self.down_button.set_enabled(self.current_page < self.total_pages - 1)
+
+    def _next_page(self):
+        if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            self._show_current_page()
+
+    def _previous_page(self):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self._show_current_page()
+
+    def _view_image(self, image_path):
+        # For now, just print the path - we'll implement viewing later
+        print(f"Viewing image: {image_path}")
+
+class FlashcardApp:
+    """Main application class"""
     def __init__(self, root):
         self.root = root
         self.root.title("Photo Flashcard App")
-        
-        # Setup screen rotation
-        ScreenManager.setup_screen_rotation()
-        
-        # Make fullscreen
         self.root.attributes('-fullscreen', True)
-        
-        # Set default background color
         self.root.configure(bg='#f0f0f0')
         
-        # Create main container
         self.container = ttk.Frame(root)
         self.container.pack(fill='both', expand=True)
         
-        # Bind escape key to exit fullscreen
+        # Key bindings
         self.root.bind('<Escape>', lambda e: self.root.attributes('-fullscreen', False))
-        # Bind F11 to toggle fullscreen
-        self.root.bind('<F11>', lambda e: self.root.attributes('-fullscreen', not self.root.attributes('-fullscreen')))
+        self.root.bind('<F11>', lambda e: self.root.attributes('-fullscreen', 
+                                        not self.root.attributes('-fullscreen')))
+        
+        # Initialize components
+        self.current_component = None
+        self.camera = None
         
         self.show_main_menu()
 
     def clear_container(self):
+        if self.current_component:
+            self.current_component.destroy()
+            self.current_component = None
         for widget in self.container.winfo_children():
             widget.destroy()
-    
+
     def create_back_button(self):
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(self.root)
-        width = int(screen_width * 0.12)
-        height = int(screen_height * 0.06)
+        width = int(self.root.winfo_screenwidth() * 0.12)
+        height = int(self.root.winfo_screenheight() * 0.06)
         
         back_btn = RoundedButton(
             self.container,
@@ -222,25 +410,21 @@ class MenuApp:
     def show_main_menu(self):
         self.clear_container()
         
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(self.root)
-        
-        # Create a frame for the grid
         grid_frame = ttk.Frame(self.container)
         grid_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        # Calculate button dimensions based on rotated screen size
-        button_width = int(screen_width * 0.35)  # Increased proportion
-        button_height = int(screen_height * 0.25)  # Increased proportion
+        button_width = int(self.root.winfo_screenwidth() * 0.35)
+        button_height = int(self.root.winfo_screenheight() * 0.25)
         
         buttons = [
             {
-                'text': "Write Notes",
-                'command': self.show_text_editor,
+                'text': "Take Picture",
+                'command': self.show_camera_preview,
                 'color': "#4CAF50"
             },
             {
-                'text': "View List",
-                'command': self.show_scrollable_list,
+                'text': "View Images",
+                'command': self.show_image_list,
                 'color': "#2196F3"
             },
             {
@@ -250,7 +434,7 @@ class MenuApp:
             },
             {
                 'text': "Quit",
-                'command': lambda: sys.exit(),
+                'command': self.root.quit,
                 'color': "#f44336"
             }
         ]
@@ -266,88 +450,50 @@ class MenuApp:
                 width=button_width,
                 height=button_height
             )
-            btn.frame.grid(row=row, column=col, padx=30, pady=30)  # Increased padding
+            btn.frame.grid(row=row, column=col, padx=30, pady=30)
 
-    def show_text_editor(self):
+    def show_camera_preview(self):
         self.clear_container()
         self.create_back_button()
         
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(self.root)
-        
-        # Create title with larger font size
         title = ttk.Label(
             self.container,
-            text="Write Notes",
-            font=('Arial', int(screen_height * 0.05), 'bold')
+            text="Take Picture",
+            font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
         )
         title.pack(pady=30)
         
-        # Create editor
-        editor = TextEditor(self.container)
-        editor.pack(fill='both', expand=True, padx=30, pady=(0, 30))
-        
-        # Create save button with larger size
-        save_btn = RoundedButton(
+        # Create camera preview with callback for image capture
+        self.current_component = CameraPreview(
             self.container,
-            text="Save Notes",
-            command=lambda: print("Saving:", editor.get_text()[:50] + "..."),
-            bg_color="#4CAF50",
-            width=int(screen_width * 0.2),
-            height=int(screen_height * 0.08)
+            callback=self._on_image_captured
         )
-        save_btn.pack(pady=(0, 30))
+        self.current_component.pack(fill='both', expand=True, padx=30, pady=(0, 30))
 
-    def show_scrollable_list(self):
+    def show_image_list(self):
         self.clear_container()
         self.create_back_button()
         
-        screen_height, screen_width = ScreenManager.get_rotated_dimensions(self.root)
-        
-        # Create title with larger font
         title = ttk.Label(
             self.container,
-            text="Scrollable List",
-            font=('Arial', int(screen_height * 0.05), 'bold')
+            text="Captured Images",
+            font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
         )
         title.pack(pady=30)
         
-        # Create canvas with scrollbar
-        canvas = tk.Canvas(self.container)
-        scrollbar = ttk.Scrollbar(
-            self.container,
-            orient="vertical",
-            command=canvas.yview
-        )
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Calculate button dimensions
-        button_width = int(screen_width * 0.4)
-        button_height = int(screen_height * 0.1)
-        
-        # Create multiple buttons
-        for i in range(20):
-            btn = RoundedButton(
-                scrollable_frame,
-                text=f"Item {i+1}",
-                command=lambda x=i: print(f"Clicked item {x+1}"),
-                width=button_width,
-                height=button_height,
-                bg_color=f"#{hash(str(i))% 0x1000000:06x}"
-            )
-            btn.pack(pady=15, padx=30)
-        
-        canvas.pack(side="left", fill="both", expand=True, padx=(30, 0))
-        scrollbar.pack(side="right", fill="y", padx=(0, 30))
+        self.current_component = ImageList(self.container)
+        self.current_component.pack(fill='both', expand=True, padx=30, pady=(0, 30))
+
+    def _on_image_captured(self, image_path):
+        """Callback for when an image is captured"""
+        print(f"Image captured: {image_path}")
+        # Here you could add additional processing, like displaying the image
+        # or automatically switching to the image list view
+
+def main():
+    root = tk.Tk()
+    app = FlashcardApp(root)
+    root.mainloop()
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = MenuApp(root)
-    root.mainloop()
+    main()

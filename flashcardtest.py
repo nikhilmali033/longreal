@@ -167,6 +167,7 @@ class CameraPreview(Component):
         self.preview_active = True
         self.preview_process = subprocess.Popen([
             "libcamera-vid",
+            "--qt-preview",  # Use QT preview instead of default
             "--width", "2304",
             "--height", "1296",
             "--codec", "mjpeg",
@@ -180,41 +181,6 @@ class CameraPreview(Component):
         
         self._update_preview()
     
-    def _read_preview_frames(self):
-        cap = cv2.VideoCapture()
-        cap.open(f"pipe:{self.preview_process.stdout.fileno()}")
-        
-        while self.preview_active:
-            ret, frame = cap.read()
-            if ret:
-                frame = cv2.resize(frame, (self.preview_width, self.preview_height))
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image = Image.fromarray(frame)
-                photo = ImageTk.PhotoImage(image)
-                
-                try:
-                    self.frame_queue.get_nowait()
-                except queue.Empty:
-                    pass
-                self.frame_queue.put(photo)
-    
-    def _update_preview(self):
-        try:
-            photo = self.frame_queue.get_nowait()
-            self.preview_canvas.delete("all")
-            self.preview_canvas.create_image(
-                self.preview_width/2,
-                self.preview_height/2,
-                image=photo,
-                anchor='center'
-            )
-            self.preview_canvas.photo = photo
-        except queue.Empty:
-            pass
-        
-        if self.preview_active:
-            self.frame.after(30, self._update_preview)
-    
     def capture_image(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{self.output_dir}/image_{timestamp}.jpg"
@@ -225,8 +191,10 @@ class CameraPreview(Component):
                 self.preview_process.terminate()
                 self.preview_process.wait()
             
+            # Use qt-preview for capture as well
             subprocess.run([
                 "libcamera-jpeg",
+                "--qt-preview",
                 "-o", filename,
                 "--width", "2304",
                 "--height", "1296"
@@ -242,14 +210,6 @@ class CameraPreview(Component):
             print(f"Error capturing image: {e}")
             self.start_preview()
             return None
-    
-    def destroy(self):
-        self.preview_active = False
-        if hasattr(self, 'preview_process'):
-            self.preview_process.terminate()
-            self.preview_process.wait()
-        super().destroy()
-
 class ImageList(Component):
     """Component to display captured images as a scrollable list"""
     def __init__(self, parent, image_dir="captured_images", **kwargs):
