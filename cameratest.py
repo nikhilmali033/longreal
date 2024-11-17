@@ -5,283 +5,249 @@ import threading
 import time
 import os
 from datetime import datetime
-import signal
 
-class CameraPreviewTest(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        
-        self.title("Camera Preview Test")
-        self.geometry("800x600")
-        
-        # Initialize variables
+class RefinedCameraPreview:
+    """A refined camera preview component that works with Qt-based libcamera"""
+    def __init__(self, parent, callback=None):
+        self.parent = parent
+        self.frame = ttk.Frame(parent)
         self.preview_process = None
         self.preview_active = False
-        self.output_dir = "camera_test_captures"
+        self.callback = callback
+        self.output_dir = "captured_images"
+        
+        # Get screen dimensions
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Calculate preview window size (16:9 aspect ratio)
+        self.preview_width = min(1280, int(self.screen_width * 0.6))
+        self.preview_height = int(self.preview_width * 9 / 16)
+        
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             
         self._create_ui()
         
-        # Bind cleanup on window close
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
     def _create_ui(self):
         """Create the user interface"""
-        # Main container
-        self.main_frame = ttk.Frame(self)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        # Status frame
+        self.status_frame = ttk.Frame(self.frame)
+        self.status_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Status indicator (circle)
+        self.canvas = tk.Canvas(
+            self.status_frame,
+            width=20,
+            height=20,
+            bg=self.frame.cget('background'),
+            highlightthickness=0
+        )
+        self.canvas.pack(side=tk.LEFT, padx=5)
+        
+        self.status_indicator = self.canvas.create_oval(
+            5, 5, 15, 15,
+            fill='red'  # Initially red for inactive
+        )
         
         # Status label
         self.status_label = ttk.Label(
-            self.main_frame,
-            text="Camera Preview Test",
-            font=('Arial', 14, 'bold')
+            self.status_frame,
+            text="Preview Inactive",
+            font=('Arial', 10)
         )
-        self.status_label.pack(pady=(0, 20))
+        self.status_label.pack(side=tk.LEFT, padx=5)
         
-        # Preview frame placeholder
-        self.preview_frame = ttk.Frame(
-            self.main_frame,
+        # Preview placeholder
+        self.placeholder = ttk.Frame(
+            self.frame,
             relief='solid',
-            borderwidth=1
+            borderwidth=1,
+            style='Preview.TFrame'
         )
-        self.preview_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        self.placeholder.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        # Control buttons
-        self.button_frame = ttk.Frame(self.main_frame)
-        self.button_frame.pack(fill=tk.X, pady=20)
+        # Create a custom style for the placeholder
+        style = ttk.Style()
+        style.configure('Preview.TFrame', background='#2a2a2a')
         
-        # Method selection
-        self.preview_method = tk.StringVar(value="method1")
-        self.method_frame = ttk.LabelFrame(
-            self.button_frame,
-            text="Preview Method"
+        # Placeholder text
+        self.placeholder_label = ttk.Label(
+            self.placeholder,
+            text="Camera preview is displayed in a separate window\nClick 'Start Preview' to begin",
+            font=('Arial', 12),
+            justify=tk.CENTER
         )
-        self.method_frame.pack(fill=tk.X, pady=(0, 10))
+        self.placeholder_label.pack(expand=True)
         
-        methods = [
-            ("Method 1 (Basic Qt)", "method1"),
-            ("Method 2 (Embedded)", "method2"),
-            ("Method 3 (Windowed)", "method3")
-        ]
+        # Control frame
+        self.control_frame = ttk.Frame(self.frame)
+        self.control_frame.pack(fill=tk.X, pady=(10, 0))
         
-        for text, value in methods:
-            ttk.Radiobutton(
-                self.method_frame,
-                text=text,
-                value=value,
-                variable=self.preview_method
-            ).pack(side=tk.LEFT, padx=10, pady=5)
-        
-        # Control buttons
-        ttk.Button(
-            self.button_frame,
+        # Start/Stop Preview button
+        self.preview_button = ttk.Button(
+            self.control_frame,
             text="Start Preview",
-            command=self.start_preview
-        ).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(
-            self.button_frame,
-            text="Stop Preview",
-            command=self.stop_preview
-        ).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(
-            self.button_frame,
-            text="Capture Image",
-            command=self.capture_image
-        ).pack(side=tk.LEFT, padx=5)
-        
-        # Log frame
-        self.log_frame = ttk.LabelFrame(self.main_frame, text="Log")
-        self.log_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
-        
-        self.log_text = tk.Text(
-            self.log_frame,
-            height=6,
-            wrap=tk.WORD
+            command=self.toggle_preview
         )
-        self.log_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.preview_button.pack(side=tk.LEFT, padx=5)
         
-    def log(self, message):
-        """Add message to log with timestamp"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert('1.0', f"[{timestamp}] {message}\n")
-        self.update_idletasks()
+        # Capture button
+        self.capture_button = ttk.Button(
+            self.control_frame,
+            text="Capture Image",
+            command=self.capture_image,
+            state=tk.DISABLED  # Initially disabled
+        )
+        self.capture_button.pack(side=tk.LEFT, padx=5)
         
-    def start_preview_method1(self):
-        """Basic Qt preview in separate window"""
-        try:
-            cmd = [
-                "libcamera-hello",
-                "--qt",
-                "--width", "800",
-                "--height", "600"
-            ]
-            self.preview_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            self.log("Started preview (Method 1)")
-            return True
-        except Exception as e:
-            self.log(f"Error starting preview: {e}")
-            return False
-            
-    def start_preview_method2(self):
-        """Attempt to embed preview in tkinter window"""
-        try:
-            # Get window ID of preview frame
-            self.preview_frame.update()
-            window_id = self.preview_frame.winfo_id()
-            
-            cmd = [
-                "libcamera-hello",
-                "--qt",
-                "--width", "800",
-                "--height", "600",
-                "--parent-window", str(window_id)
-            ]
-            self.preview_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            self.log("Started preview (Method 2)")
-            return True
-        except Exception as e:
-            self.log(f"Error starting preview: {e}")
-            return False
-            
-    def start_preview_method3(self):
-        """Windowed preview with position matching"""
-        try:
-            # Get preview frame position
-            self.preview_frame.update()
-            x = self.preview_frame.winfo_rootx()
-            y = self.preview_frame.winfo_rooty()
-            
-            cmd = [
-                "libcamera-hello",
-                "--qt",
-                "--width", "800",
-                "--height", "600",
-                "--position", f"{x},{y}"
-            ]
-            self.preview_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            self.log("Started preview (Method 3)")
-            return True
-        except Exception as e:
-            self.log(f"Error starting preview: {e}")
-            return False
+    def toggle_preview(self):
+        """Toggle preview state"""
+        if self.preview_active:
+            self.stop_preview()
+        else:
+            self.start_preview()
             
     def start_preview(self):
-        """Start camera preview using selected method"""
-        if self.preview_active:
-            self.log("Preview already running")
-            return
-            
-        method = self.preview_method.get()
-        success = False
-        
-        if method == "method1":
-            success = self.start_preview_method1()
-        elif method == "method2":
-            success = self.start_preview_method2()
-        elif method == "method3":
-            success = self.start_preview_method3()
-            
-        if success:
-            self.preview_active = True
-            self.status_label.config(text="Preview Active")
-            
-            # Start monitoring thread
-            threading.Thread(
-                target=self._monitor_preview,
-                daemon=True
-            ).start()
-            
+        """Start the camera preview"""
+        if not self.preview_active:
+            try:
+                # Calculate center position for preview window
+                x = (self.screen_width - self.preview_width) // 2
+                y = (self.screen_height - self.preview_height) // 2
+                
+                cmd = [
+                    "libcamera-hello",
+                    "--qt",
+                    "--width", str(self.preview_width),
+                    "--height", str(self.preview_height),
+                    "--position", f"{x},{y}",  # Position the window
+                    "--info", "0"  # Disable info overlay for cleaner preview
+                ]
+                
+                self.preview_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                
+                # Update UI
+                self.preview_active = True
+                self.canvas.itemconfig(self.status_indicator, fill='green')
+                self.status_label.config(text="Preview Active")
+                self.preview_button.config(text="Stop Preview")
+                self.capture_button.config(state=tk.NORMAL)
+                self.placeholder_label.config(
+                    text="Preview window is now active\nUse the preview window to frame your shot"
+                )
+                
+                # Start monitoring thread
+                threading.Thread(
+                    target=self._monitor_preview,
+                    daemon=True
+                ).start()
+                
+            except Exception as e:
+                self._show_error(f"Failed to start preview: {e}")
+                
     def stop_preview(self):
-        """Stop camera preview"""
+        """Stop the camera preview"""
         if self.preview_process:
             try:
-                # Try graceful shutdown first
                 self.preview_process.terminate()
                 try:
                     self.preview_process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    # Force kill if necessary
                     self.preview_process.kill()
                     self.preview_process.wait()
             except Exception as e:
-                self.log(f"Error stopping preview: {e}")
+                self._show_error(f"Error stopping preview: {e}")
             
             self.preview_process = None
             self.preview_active = False
-            self.status_label.config(text="Preview Stopped")
-            self.log("Stopped preview")
+            
+            # Update UI
+            self.canvas.itemconfig(self.status_indicator, fill='red')
+            self.status_label.config(text="Preview Inactive")
+            self.preview_button.config(text="Start Preview")
+            self.capture_button.config(state=tk.DISABLED)
+            self.placeholder_label.config(
+                text="Camera preview is displayed in a separate window\nClick 'Start Preview' to begin"
+            )
             
     def capture_image(self):
         """Capture an image"""
-        # Stop preview temporarily
+        # Temporarily stop preview
         self.stop_preview()
         
         try:
+            # Update UI
+            self.status_label.config(text="Capturing...")
+            self.parent.update()
+            
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.output_dir, f"test_{timestamp}.jpg")
+            filename = os.path.join(self.output_dir, f"image_{timestamp}.jpg")
             
             # Capture image
             cmd = [
                 "libcamera-jpeg",
                 "--qt",
                 "-o", filename,
-                "--width", "2304",
-                "--height", "1296"
+                "--width", "2304",  # Max resolution for capture
+                "--height", "1296",
+                "--nopreview"
             ]
             
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True
+                text=True,
+                check=True
             )
             
-            if result.returncode == 0:
-                self.log(f"Image captured: {filename}")
-            else:
-                self.log(f"Capture failed: {result.stderr}")
+            # Call callback with captured image path
+            if self.callback:
+                self.callback(filename)
                 
+            # Show success in UI
+            self.placeholder_label.config(
+                text=f"Image captured successfully!\nSaved as: {os.path.basename(filename)}"
+            )
+            
+        except subprocess.CalledProcessError as e:
+            self._show_error(f"Failed to capture image: {e.stderr}")
         except Exception as e:
-            self.log(f"Error capturing image: {e}")
+            self._show_error(f"Error during capture: {e}")
             
         # Restart preview
         self.start_preview()
             
     def _monitor_preview(self):
-        """Monitor preview process"""
+        """Monitor the preview process"""
         while self.preview_active and self.preview_process:
             if self.preview_process.poll() is not None:
-                self.log("Preview process ended unexpectedly")
+                # Preview process ended unexpectedly
                 self.preview_active = False
-                self.preview_process = None
-                self.status_label.config(text="Preview Stopped")
+                self.parent.after(0, self.stop_preview)  # Schedule UI update on main thread
                 break
             time.sleep(0.5)
             
-    def on_closing(self):
-        """Clean up on window close"""
+    def _show_error(self, message):
+        """Show error message in UI"""
+        self.status_label.config(text="Error")
+        self.placeholder_label.config(text=f"Error: {message}")
+        print(f"Camera Error: {message}")  # Also print to console for debugging
+        
+    def pack(self, **kwargs):
+        """Pack the frame with given options"""
+        self.frame.pack(**kwargs)
+        
+    def grid(self, **kwargs):
+        """Grid the frame with given options"""
+        self.frame.grid(**kwargs)
+        
+    def destroy(self):
+        """Clean up resources"""
         self.stop_preview()
-        self.quit()
-
-def main():
-    app = CameraPreviewTest()
-    app.mainloop()
-
-if __name__ == "__main__":
-    main()
+        self.frame.destroy()
