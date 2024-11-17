@@ -120,15 +120,14 @@ class RoundedButton(Component):
     def _on_click(self, event):
         if self.enabled:
             self.command()
-
 class CameraPreview(Component):
-    """Camera preview component with capture functionality"""
+    """Camera preview component with Qt preview and capture functionality"""
     def __init__(self, parent, callback=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.preview_active = False
-        self.frame_queue = queue.Queue(maxsize=1)
         self.output_dir = "captured_images"
         self.callback = callback
+        self.preview_process = None
         
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -136,80 +135,86 @@ class CameraPreview(Component):
         self._create_ui()
         
     def _create_ui(self):
-        # Calculate preview dimensions
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
-        self.preview_width = int(screen_width * 0.7)
-        self.preview_height = int(screen_height * 0.6)
-        
-        # Create preview canvas
-        self.preview_canvas = tk.Canvas(
-            self.frame,
-            width=self.preview_width,
-            height=self.preview_height,
-            bg='black',
-            highlightthickness=0
-        )
-        self.preview_canvas.pack(pady=20)
+        # Create control frame for button
+        self.control_frame = ttk.Frame(self.frame)
+        self.control_frame.pack(pady=20)
         
         # Create capture button
         self.capture_btn = RoundedButton(
-            self.frame,
+            self.control_frame,
             text="Capture",
             command=self.capture_image,
             bg_color="#4CAF50"
         )
         self.capture_btn.pack(pady=20)
         
-        self.start_preview()
+        # Start preview when UI is ready
+        self.frame.after(100, self.start_preview)
     
     def start_preview(self):
-        self.preview_active = True
-        self.preview_process = subprocess.Popen([
-            "libcamera-vid",
-            "--qt-preview",  # Use QT preview instead of default
-            "--width", "2304",
-            "--height", "1296",
-            "--codec", "mjpeg",
-            "--inline",
-            "--output", "-"
-        ], stdout=subprocess.PIPE)
-        
-        self.preview_thread = threading.Thread(target=self._read_preview_frames)
-        self.preview_thread.daemon = True
-        self.preview_thread.start()
-        
-        self._update_preview()
+        """Start the Qt preview window"""
+        if self.preview_process is None:
+            try:
+                self.preview_active = True
+                self.preview_process = subprocess.Popen([
+                    "libcamera-vid",
+                    "--qt-preview",
+                    "--width", "2304",
+                    "--height", "1296",
+                    "--timeout", "0",  # Run indefinitely
+                    "--nopreview"  # Disable the default preview
+                ])
+            except subprocess.CalledProcessError as e:
+                print(f"Error starting preview: {e}")
+    
+    def stop_preview(self):
+        """Stop the Qt preview window"""
+        if self.preview_process:
+            self.preview_active = False
+            self.preview_process.terminate()
+            try:
+                self.preview_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.preview_process.kill()
+            self.preview_process = None
     
     def capture_image(self):
+        """Capture an image using libcamera-jpeg"""
+        # Temporarily stop the preview
+        self.stop_preview()
+        
+        # Generate timestamp and filename
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{self.output_dir}/image_{timestamp}.jpg"
         
         try:
-            self.preview_active = False
-            if hasattr(self, 'preview_process'):
-                self.preview_process.terminate()
-                self.preview_process.wait()
-            
-            # Use qt-preview for capture as well
+            # Capture image using libcamera-jpeg
             subprocess.run([
                 "libcamera-jpeg",
-                "--qt-preview",
                 "-o", filename,
                 "--width", "2304",
-                "--height", "1296"
+                "--height", "1296",
+                "--qt-preview"  # Show preview during capture
             ], check=True)
             
+            # Call the callback with the captured image path
             if self.callback:
                 self.callback(filename)
-            
+                
+            # Restart the preview
             self.start_preview()
             return filename
             
         except subprocess.CalledProcessError as e:
             print(f"Error capturing image: {e}")
+            # Restart the preview even if capture failed
             self.start_preview()
             return None
+    
+    def destroy(self):
+        """Clean up resources when component is destroyed"""
+        self.stop_preview()
+        super().destroy()
 class ImageList(Component):
     """Component to display captured images as a scrollable list"""
     def __init__(self, parent, image_dir="captured_images", **kwargs):
@@ -323,7 +328,6 @@ class ImageList(Component):
     def _view_image(self, image_path):
         # For now, just print the path - we'll implement viewing later
         print(f"Viewing image: {image_path}")
-
 class FlashcardApp:
     """Main application class"""
     def __init__(self, root):
