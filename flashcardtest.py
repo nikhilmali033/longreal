@@ -429,6 +429,25 @@ class MenuApp:
         self.show_main_menu()
 
     def clear_container(self):
+        if self.camera:  # Add this cleanup
+            self.camera.destroy()
+            self.camera = None
+        for widget in self.container.winfo_children():
+            widget.destroy()
+
+    def show_camera_preview(self):
+        self.clear_container()
+        self.create_back_button()
+        
+        title = ttk.Label(
+            self.container,
+            text="Take Picture",
+            font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
+        )
+        title.pack(pady=30)
+        
+        self.camera = CameraPreview(self.container)  # Store the reference
+        self.camera.pack(fill='both', expand=True, padx=30, pady=(0, 30))
         for widget in self.container.winfo_children():
             widget.destroy()
     
@@ -492,47 +511,20 @@ class MenuApp:
                 height=button_height
             )
             btn.frame.grid(row=row, column=col, padx=30, pady=30)
-
-    def show_camera_preview(self):
-        self.clear_container()
-        self.create_back_button()
-        
-        # Create title
-        title = ttk.Label(
-            self.container,
-            text="Take Picture",
-            font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
-        )
-        title.pack(pady=30)
-        
-        # Create camera preview
-        camera = CameraPreview(self.container)
-        camera.pack(fill='both', expand=True, padx=30, pady=(0, 30))
-        self.clear_container()
-        self.create_back_button()
-        
-        # Create title
-        title = ttk.Label(
-            self.container,
-            text="Write Notes",
-            font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
-        )
-        title.pack(pady=30)
-        
-        # Create editor
-        editor = TextEditor(self.container)
-        editor.pack(fill='both', expand=True, padx=30, pady=(0, 30))
-        
-        # Create save button
-        save_btn = RoundedButton(
-            self.container,
-            text="Save Notes",
-            command=lambda: print("Saving:", editor.get_text()[:50] + "..."),
-            bg_color="#4CAF50",
-            width=int(self.root.winfo_screenwidth() * 0.2),
-            height=int(self.root.winfo_screenheight() * 0.08)
-        )
-        save_btn.pack(pady=(0, 30))
+            self.clear_container()
+            self.create_back_button()
+            
+            # Create title
+            title = ttk.Label(
+                self.container,
+                text="Take Picture",
+                font=('Arial', int(self.root.winfo_screenheight() * 0.05), 'bold')
+            )
+            title.pack(pady=30)
+            
+            # Create camera preview
+            camera = CameraPreview(self.container)
+            camera.pack(fill='both', expand=True, padx=30, pady=(0, 30))
 
     def show_scrollable_list(self):
         self.clear_container()
