@@ -15,21 +15,21 @@ class WorkingCameraPreview:
         self.callback = callback
         self.output_dir = "captured_images"
         
+        # Preview window dimensions (16:9 aspect ratio)
+        self.preview_width = 800
+        self.preview_height = 450
+        
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             
         self._create_ui()
         
     def _create_ui(self):
-        # Main container with dark theme
-        style = ttk.Style()
-        style.configure('Preview.TFrame', background='#2a2a2a')
-        
         # Status frame
         self.status_frame = ttk.Frame(self.frame)
         self.status_frame.pack(fill=tk.X, pady=10, padx=10)
         
-        # Status indicator (circle) - using system background color
+        # Status indicator (circle)
         self.canvas = tk.Canvas(
             self.status_frame,
             width=20,
@@ -62,6 +62,13 @@ class WorkingCameraPreview:
         )
         self.message_label.pack(pady=20)
         
+        # Preview placeholder to help with positioning
+        self.placeholder = ttk.Frame(
+            self.frame,
+            height=200  # Arbitrary height for visual reference
+        )
+        self.placeholder.pack(fill=tk.X, padx=20, pady=10)
+        
         # Button frame
         self.button_frame = ttk.Frame(self.frame)
         self.button_frame.pack(pady=20)
@@ -85,17 +92,44 @@ class WorkingCameraPreview:
         )
         self.capture_button.pack(side=tk.LEFT, padx=5)
 
-    def toggle_preview(self):
-        if self.preview_active:
-            self.stop_preview()
-        else:
-            self.start_preview()
+    def calculate_preview_position(self):
+        """Calculate the position for the preview window relative to the placeholder"""
+        # Ensure placeholder widget is updated
+        self.placeholder.update_idletasks()
+        
+        # Get the placeholder's position on screen
+        x = self.placeholder.winfo_rootx()
+        y = self.placeholder.winfo_rooty()
+        
+        # Get placeholder dimensions
+        width = self.placeholder.winfo_width()
+        
+        # Center the preview window horizontally relative to the placeholder
+        x = x + (width - self.preview_width) // 2
+        
+        # Ensure preview window stays on screen
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
+        
+        x = max(0, min(x, screen_width - self.preview_width))
+        y = max(0, min(y, screen_height - self.preview_height))
+        
+        return x, y
 
     def start_preview(self):
         if not self.preview_active:
             try:
-                # Using the simple command we know works
-                cmd = ["libcamera-hello", "--qt"]
+                # Calculate position
+                x, y = self.calculate_preview_position()
+                
+                # Command with positioning
+                cmd = [
+                    "libcamera-hello",
+                    "--qt",
+                    "--width", str(self.preview_width),
+                    "--height", str(self.preview_height),
+                    "--position", f"{x},{y}"
+                ]
                 
                 self.preview_process = subprocess.Popen(
                     cmd,
@@ -117,6 +151,12 @@ class WorkingCameraPreview:
             except Exception as e:
                 self.message_label.config(text=f"Error: {str(e)}")
                 print(f"Preview error: {e}")
+
+    def toggle_preview(self):
+        if self.preview_active:
+            self.stop_preview()
+        else:
+            self.start_preview()
 
     def stop_preview(self):
         if self.preview_process:
@@ -209,7 +249,7 @@ class WorkingCameraPreview:
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Camera Preview Test")
-    root.geometry("600x400")
+    root.geometry("1024x768")  # Larger window for testing
     
     def on_image_captured(filename):
         print(f"Image captured: {filename}")
