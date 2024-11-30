@@ -14,7 +14,7 @@ import pytesseract
 import logging
 from PIL import Image, ImageDraw
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
     """Base component class"""
@@ -1152,8 +1152,8 @@ class NameInputOCR(Component):
         control_frame = ttk.Frame(self.frame)
         control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
         
-        button_width = int(self.screen_width * 0.12)
-        button_height = int(self.screen_height * 0.04)
+        button_width = int(self.screen_width * 0.2)
+        button_height = int(self.screen_height * 0.1)
         
         # OCR button to read characters
         self.ocr_btn = RoundedButton(
