@@ -336,8 +336,8 @@ class ImageList(Component):
             self._show_current_page()
 
     def _view_image(self, image_path):
-        # For now, just print the path - we'll implement viewing later
-        print(f"Viewing image: {image_path}")
+        """Display the selected image in a dialog"""
+        ImageViewerDialog(self.parent, image_path)
 
 class CaptureReviewComponent(Component):
     def __init__(self, parent, final_callback=None, **kwargs):
@@ -1367,6 +1367,7 @@ class NameInputOCR(Component):
         if hasattr(self, 'save_btn'):
             self.save_btn.set_enabled(False)  # Disable save button
 
+
 class OCRConfirmationDialog(Component):
     """Custom dialog for confirming OCR results"""
     def __init__(self, parent, recognized_text, on_confirm, on_retry, **kwargs):
@@ -1391,8 +1392,8 @@ class OCRConfirmationDialog(Component):
         self.overlay.configure(bg='black')
         self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
         
-        # Create dialog frame
-        dialog_width = int(self.screen_width * 0.8)
+        # Create dialog frame with reduced width
+        dialog_width = int(self.screen_width * 0.6)  # Reduced from 0.8
         dialog_height = int(self.screen_height * 0.4)
         
         self.frame.configure(
@@ -1432,8 +1433,8 @@ class OCRConfirmationDialog(Component):
         button_frame = ttk.Frame(self.frame)
         button_frame.pack(side='bottom', pady=height * 0.05)
         
-        # Button dimensions
-        button_width = int(width * 0.25)
+        # Button dimensions - reduced width and padding
+        button_width = int(width * 0.2)  # Reduced from 0.25
         button_height = int(height * 0.15)
         
         # Confirm button
@@ -1445,7 +1446,7 @@ class OCRConfirmationDialog(Component):
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.confirm_btn.pack(side='left', padx=width * 0.05)
+        self.confirm_btn.pack(side='left', padx=width * 0.02)  # Reduced from 0.05
         
         # Retry button
         self.retry_btn = RoundedButton(
@@ -1456,7 +1457,7 @@ class OCRConfirmationDialog(Component):
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.retry_btn.pack(side='left', padx=width * 0.05)
+        self.retry_btn.pack(side='left', padx=width * 0.02)  # Reduced from 0.05
     
     def _confirm(self):
         self.destroy()
@@ -1467,6 +1468,81 @@ class OCRConfirmationDialog(Component):
         self.destroy()
         if self.on_retry:
             self.on_retry()
+    
+    def destroy(self):
+        self.overlay.destroy()
+        super().destroy()
+
+class ImageViewerDialog(Component):
+    """Dialog for viewing full-size images"""
+    def __init__(self, parent, image_path, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.image_path = image_path
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Create semi-transparent overlay
+        self.overlay = tk.Frame(parent, bg='black')
+        self.overlay.place(x=0, y=0, relwidth=1, relheight=1)
+        self.overlay.configure(bg='black')
+        self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
+        
+        # Create dialog frame
+        self.frame.configure(relief='solid', borderwidth=1, padding=10)
+        self.frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.frame.configure(style='Custom.TFrame')
+        
+        self._create_ui()
+        
+    def _create_ui(self):
+        try:
+            # Load and display image
+            image = Image.open(self.image_path)
+            
+            # Calculate maximum dimensions (80% of screen)
+            max_width = int(self.screen_width * 0.8)
+            max_height = int(self.screen_height * 0.8)
+            
+            # Calculate scaling factor
+            width_ratio = max_width / image.width
+            height_ratio = max_height / image.height
+            scale_factor = min(width_ratio, height_ratio)
+            
+            new_width = int(image.width * scale_factor)
+            new_height = int(image.height * scale_factor)
+            
+            # Resize image
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Create image label
+            self.image_label = ttk.Label(self.frame, image=photo)
+            self.image_label.image = photo
+            self.image_label.pack(pady=10)
+            
+            # Close button
+            close_btn = RoundedButton(
+                self.frame,
+                text="Close",
+                command=self.destroy,
+                width=int(self.screen_width * 0.1),
+                height=int(self.screen_height * 0.06),
+                bg_color="#c6eb34"
+            )
+            close_btn.pack(pady=10)
+            
+            # Bind escape key to close
+            self.frame.winfo_toplevel().bind('<Escape>', lambda e: self.destroy())
+            
+        except Exception as e:
+            print(f"Error displaying image: {e}")
+            ttk.Label(
+                self.frame,
+                text=f"Error displaying image: {str(e)}",
+                font=('Arial', int(self.screen_height * 0.02))
+            ).pack(pady=20)
     
     def destroy(self):
         self.overlay.destroy()
