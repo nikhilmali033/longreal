@@ -14,7 +14,7 @@ import pytesseract
 import logging
 from PIL import Image, ImageDraw
 
-#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
     """Base component class"""
@@ -245,6 +245,9 @@ class ImageList(Component):
         nav_button_width = int(self.parent.winfo_screenwidth() * 0.06)  # Reduced from 0.08
         nav_button_height = int(self.parent.winfo_screenheight() * 0.10)  # Reduced from 0.15
 
+
+        screen_width = self.parent.winfo_screenwidth()
+        screen_height = self.parent.winfo_screenheight()
         # Navigation buttons
         self.up_button = RoundedButton(
             nav_frame,
@@ -538,11 +541,11 @@ class CaptureReviewComponent(Component):
                 self.final_callback(new_path)
                 
         except Exception as e:
-            tk.messagebox.showerror(
-                "Error",
-                f"Failed to save image with new name: {str(e)}"
-            )
-            
+            print(f"Error saving file: {e}")  # Just print to console instead of showing messagebox
+            if self.final_callback:
+                self.final_callback(self.current_image_path)  # Still proceed even if rename fails
+
+
     def _handle_name_cancel(self):
         """Handle cancellation of name input"""
         # Restore original capture review UI
@@ -721,6 +724,7 @@ class CharacterOCRComponent(Component):
         self.num_regions = num_rows * boxes_per_row
         
         # Calculate dimensions based on screen size
+        
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
         
@@ -1008,19 +1012,24 @@ class NameInputOCR(Component):
         # Calculate dimensions based on screen size
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
-        self.region_size = int(self.screen_width * 0.08)  # Reduced from 0.12
+        self.region_size = int(self.screen_width * 0.08)
         self.num_regions = 8
-        self.line_width = max(1, int(self.region_size * 0.03))  # Minimum line width of 1
+        self.line_width = max(1, int(self.region_size * 0.03))
         
-        self._create_ui()
-        self._setup_regions()
-        self._create_controls()
+        # Initialize the result label at class level
+        self.result_label = None
+        self.current_text = ""  # Add this to track the current text
         
         # Initialize drawing state
         self.drawing = False
         self.current_region = None
         self.last_x = None
         self.last_y = None
+        
+        # Create the UI
+        self._create_ui()
+        self._setup_regions()
+        self._create_controls()
 
     def _create_ui(self):
         """Create the main UI components"""
@@ -1060,10 +1069,19 @@ class NameInputOCR(Component):
         )
         self.canvas.pack(expand=True)
         
+        # Result label - Added after canvas
+        self.result_label = ttk.Label(
+            self.frame,
+            text="",  # Empty initially
+            font=('Arial', int(self.screen_height * 0.02))
+        )
+        self.result_label.pack(pady=10)  # Make sure to pack it!
+        
         # Bind events
         self.canvas.bind("<Button-1>", self._start_drawing)
         self.canvas.bind("<B1-Motion>", self._draw)
         self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
+
 
     def _show_image_preview(self):
         """Show a small preview of the captured image if available"""
@@ -1132,21 +1150,33 @@ class NameInputOCR(Component):
     def _create_controls(self):
         """Create control buttons"""
         control_frame = ttk.Frame(self.frame)
-        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)  # Reduced padding
+        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
         
-        button_width = int(self.screen_width * 0.12)  # Reduced from 0.15
-        button_height = int(self.screen_height * 0.04)  # Reduced from 0.06
+        button_width = int(self.screen_width * 0.12)
+        button_height = int(self.screen_height * 0.04)
         
-        # Confirm button
-        self.confirm_btn = RoundedButton(
+        # OCR button to read characters
+        self.ocr_btn = RoundedButton(
             control_frame,
-            text="Confirm Name",
-            command=self._confirm_name,
+            text="Read Text",
+            command=self._perform_ocr,
             width=button_width,
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.confirm_btn.pack(side=tk.LEFT, padx=20)
+        self.ocr_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Save button (initially disabled)
+        self.save_btn = RoundedButton(
+            control_frame,
+            text="Save",
+            command=self._save_and_proceed,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.save_btn.pack(side=tk.LEFT, padx=20)
+        self.save_btn.set_enabled(False)  # Disabled until OCR is performed
         
         # Clear button
         self.clear_btn = RoundedButton(
@@ -1170,6 +1200,53 @@ class NameInputOCR(Component):
         )
         self.cancel_btn.pack(side=tk.RIGHT, padx=20)
 
+
+
+    def _perform_ocr(self):
+        """Process the written characters and show result"""
+        results = []
+        for img in self.region_images:
+            img_array = np.array(img)
+            _, thresh = cv2.threshold(
+                img_array, 0, 255,
+                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
+            
+            text = pytesseract.image_to_string(
+                thresh,
+                config='--psm 10 --oem 3'
+            ).strip()
+            
+            if text:  # Only append non-empty results
+                results.append(text)
+        
+        if results:
+            # Join characters and clean the filename
+            self.current_text = ''.join(results)
+            self.current_text = ''.join(c for c in self.current_text if c.isalnum() or c in '._- ')
+            
+            # Update result label and enable save button
+            self.result_label.configure(text=f"Recognized text: {self.current_text}")
+            self.save_btn.set_enabled(True)
+        else:
+            self.current_text = ""  # Set empty text if no results
+            self.result_label.configure(text="No text detected. Please try again.")
+            self.save_btn.set_enabled(False)
+
+
+    def _save_and_proceed(self):
+        """Save the recognized text and proceed"""
+        if hasattr(self, 'current_text') and self.current_text:
+            if self.on_confirm:
+                self.on_confirm(self.current_text)
+
+    def clear_all(self):
+        """Clear all regions and reset UI"""
+        super().clear_all()  # Call existing clear method
+        self.result_label.config(text="")  # Clear result text
+        self.save_btn.set_enabled(False)  # Disable save button
+
+
     def _confirm_name(self):
         """Process the written characters and confirm the name"""
         results = []
@@ -1192,11 +1269,22 @@ class NameInputOCR(Component):
             # Join characters and clean the filename
             filename = ''.join(results)
             filename = ''.join(c for c in filename if c.isalnum() or c in '._- ')
-            if self.on_confirm:
-                self.on_confirm(filename)
+            
+            # Show confirmation dialog
+            OCRConfirmationDialog(
+                self.parent,
+                filename,
+                on_confirm=lambda name: self._handle_confirmation(name),
+                on_retry=self.clear_all
+            )
         else:
             # Show error if no characters were recognized
             self._show_error("No characters detected. Please write a name.")
+
+    def _handle_confirmation(self, filename):
+        """Handle confirmed filename"""
+        if self.on_confirm:
+            self.on_confirm(filename)
 
     def _show_error(self, message):
         """Show error message to user"""
@@ -1271,6 +1359,118 @@ class NameInputOCR(Component):
             Image.new('L', (self.region_size, self.region_size), 'white')
             for _ in range(self.num_regions)
         ]
+        
+        # Update the result label text
+        if self.result_label:
+            self.result_label.configure(text="")  # Clear result text
+            
+        if hasattr(self, 'save_btn'):
+            self.save_btn.set_enabled(False)  # Disable save button
+
+class OCRConfirmationDialog(Component):
+    """Custom dialog for confirming OCR results"""
+    def __init__(self, parent, recognized_text, on_confirm, on_retry, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.recognized_text = recognized_text
+        self.on_confirm = on_confirm
+        self.on_retry = on_retry
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Create semi-transparent overlay
+        self.overlay = tk.Frame(
+            parent,
+            bg='black'
+        )
+        self.overlay.place(
+            x=0, y=0,
+            relwidth=1, relheight=1
+        )
+        self.overlay.configure(bg='black')
+        self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
+        
+        # Create dialog frame
+        dialog_width = int(self.screen_width * 0.8)
+        dialog_height = int(self.screen_height * 0.4)
+        
+        self.frame.configure(
+            relief='solid',
+            borderwidth=1,
+            padding=10
+        )
+        self.frame.place(
+            relx=0.5, rely=0.5,
+            anchor='center',
+            width=dialog_width,
+            height=dialog_height
+        )
+        self.frame.configure(style='Custom.TFrame')
+        
+        self._create_ui(dialog_width, dialog_height)
+        
+    def _create_ui(self, width, height):
+        # Title
+        ttk.Label(
+            self.frame,
+            text="Confirm Name",
+            font=('Arial', int(self.screen_height * 0.03), 'bold'),
+            justify='center'
+        ).pack(pady=(height * 0.05, height * 0.02))
+        
+        # Recognition result
+        ttk.Label(
+            self.frame,
+            text=f"Recognized text: {self.recognized_text}",
+            font=('Arial', int(self.screen_height * 0.025)),
+            justify='center',
+            wraplength=width * 0.8
+        ).pack(pady=(0, height * 0.05))
+        
+        # Buttons container
+        button_frame = ttk.Frame(self.frame)
+        button_frame.pack(side='bottom', pady=height * 0.05)
+        
+        # Button dimensions
+        button_width = int(width * 0.25)
+        button_height = int(height * 0.15)
+        
+        # Confirm button
+        self.confirm_btn = RoundedButton(
+            button_frame,
+            text="Save",
+            command=self._confirm,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.confirm_btn.pack(side='left', padx=width * 0.05)
+        
+        # Retry button
+        self.retry_btn = RoundedButton(
+            button_frame,
+            text="Retry",
+            command=self._retry,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.retry_btn.pack(side='left', padx=width * 0.05)
+    
+    def _confirm(self):
+        self.destroy()
+        if self.on_confirm:
+            self.on_confirm(self.recognized_text)
+    
+    def _retry(self):
+        self.destroy()
+        if self.on_retry:
+            self.on_retry()
+    
+    def destroy(self):
+        self.overlay.destroy()
+        super().destroy()
 
 def main():
     root = tk.Tk()
