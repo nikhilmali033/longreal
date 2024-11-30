@@ -51,10 +51,10 @@ class RoundedButton(Component):
         self.disabled_color = "#cccccc"
         self.enabled = True
         
-        # Default sizes based on screen size
-        self.width = width or int(parent.winfo_screenwidth() * 0.15)
-        self.height = height or int(parent.winfo_screenheight() * 0.08)
-        self.corner_radius = corner_radius
+        # Smaller default sizes for small screens
+        self.width = width or int(parent.winfo_screenwidth() * 0.12)  # Reduced from 0.15
+        self.height = height or int(parent.winfo_screenheight() * 0.06)  # Reduced from 0.08
+        self.corner_radius = min(corner_radius, self.height // 4)  # Scale radius with height
         
         self._create_button()
 
@@ -77,7 +77,7 @@ class RoundedButton(Component):
         self.canvas.itemconfig(self.shape, fill=self.bg_color, outline=self.bg_color)
         
         # Create text with smaller font size (reduced from 0.3 to 0.2)
-        font_size = int(self.height * 0.2)
+        font_size = int(self.height * 0.15)  # Reduced from 0.2
         self.canvas_text = self.canvas.create_text(
             self.width/2,
             self.height/2,
@@ -239,13 +239,11 @@ class ImageList(Component):
     def _create_ui(self):
         # Navigation buttons container
         nav_frame = ttk.Frame(self.frame)
-        nav_frame.pack(side='right', fill='y', padx=20)
+        nav_frame.pack(side='right', fill='y', padx=5)  # Reduced padding
 
-        # Calculate button sizes
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
-        nav_button_width = int(screen_width * 0.08)
-        nav_button_height = int(screen_height * 0.15)
+        # Smaller navigation buttons
+        nav_button_width = int(self.parent.winfo_screenwidth() * 0.06)  # Reduced from 0.08
+        nav_button_height = int(self.parent.winfo_screenheight() * 0.10)  # Reduced from 0.15
 
         # Navigation buttons
         self.up_button = RoundedButton(
@@ -298,10 +296,8 @@ class ImageList(Component):
             widget.destroy()
 
         # Calculate dimensions
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
-        button_width = int(screen_width * 0.4)
-        button_height = int(screen_height * 0.18)
+        button_width = int(self.parent.winfo_screenwidth() * 0.30)  # Reduced from 0.4
+        button_height = int(self.parent.winfo_screenheight() * 0.12)  # Reduced from 0.18
 
         # Get current page images
         start_idx = self.current_page * self.images_per_page
@@ -584,8 +580,9 @@ class FlashcardApp:
             widget.destroy()
 
     def create_back_button(self):
-        width = int(self.root.winfo_screenwidth() * 0.12)
-        height = int(self.root.winfo_screenheight() * 0.06)
+        # Smaller back button
+        width = int(self.root.winfo_screenwidth() * 0.08)  # Reduced from 0.12
+        height = int(self.root.winfo_screenheight() * 0.04)  # Reduced from 0.06
         
         back_btn = RoundedButton(
             self.container,
@@ -593,9 +590,9 @@ class FlashcardApp:
             command=self.show_main_menu,
             width=width,
             height=height,
-            bg_color="#4CAF50"
+            bg_color="#c6eb34"
         )
-        back_btn.pack(anchor='nw', padx=20, pady=20)
+        back_btn.pack(anchor='nw', padx=5, pady=5)  # Reduced padding
 
     def show_main_menu(self):
         self.clear_container()
@@ -603,8 +600,8 @@ class FlashcardApp:
         grid_frame = ttk.Frame(self.container)
         grid_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        button_width = int(self.root.winfo_screenwidth() * 0.35)
-        button_height = int(self.root.winfo_screenheight() * 0.25)
+        button_width = int(self.root.winfo_screenwidth() * 0.25)  # Reduced from 0.35
+        button_height = int(self.root.winfo_screenheight() * 0.15)  # Reduced from 0.25
         
         buttons = [
             {
@@ -645,7 +642,7 @@ class FlashcardApp:
                 width=button_width,
                 height=button_height
             )
-            btn.frame.grid(row=row, column=col, padx=30, pady=30)
+            btn.frame.grid(row=row, column=col, padx=10, pady=10)  # Reduced from 30
 
     def show_camera_preview(self):
         self.clear_container()
@@ -1011,9 +1008,9 @@ class NameInputOCR(Component):
         # Calculate dimensions based on screen size
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
-        self.region_size = int(self.screen_width * 0.12)  # Slightly larger boxes for text
-        self.num_regions = 8  # Allow for longer names
-        self.line_width = max(2, int(self.region_size * 0.03))
+        self.region_size = int(self.screen_width * 0.08)  # Reduced from 0.12
+        self.num_regions = 8
+        self.line_width = max(1, int(self.region_size * 0.03))  # Minimum line width of 1
         
         self._create_ui()
         self._setup_regions()
@@ -1135,10 +1132,10 @@ class NameInputOCR(Component):
     def _create_controls(self):
         """Create control buttons"""
         control_frame = ttk.Frame(self.frame)
-        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=20)
+        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)  # Reduced padding
         
-        button_width = int(self.screen_width * 0.15)
-        button_height = int(self.screen_height * 0.06)
+        button_width = int(self.screen_width * 0.12)  # Reduced from 0.15
+        button_height = int(self.screen_height * 0.04)  # Reduced from 0.06
         
         # Confirm button
         self.confirm_btn = RoundedButton(
