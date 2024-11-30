@@ -14,7 +14,7 @@ import pytesseract
 import logging
 from PIL import Image, ImageDraw
 
-#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
     """Base component class"""
@@ -405,6 +405,32 @@ class CaptureReviewComponent(Component):
         )
         self.proceed_button.pack(side=tk.LEFT, padx=10)
         self.proceed_button.set_enabled(False)
+        
+        # Bypass button
+        self.bypass_button = RoundedButton(
+            self.button_frame,
+            text="Skip Photo",
+            command=self.bypass_photo,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.bypass_button.pack(side=tk.RIGHT, padx=10)
+
+    def bypass_photo(self):
+        """Skip the photo-taking process and go straight to name input"""
+        # Clear current UI
+        for widget in self.frame.winfo_children():
+            widget.destroy()
+        
+        # Show name input OCR without an image
+        self.name_input = NameInputOCR(
+            self.frame,
+            image_path=None,  # No image path when bypassing
+            on_confirm=self._handle_name_confirmation,
+            on_cancel=self._handle_name_cancel
+        )
+        self.name_input.pack(fill='both', expand=True)
 
     def capture_image(self):
         """Capture an image and display it for review"""
@@ -1043,7 +1069,16 @@ class NameInputOCR(Component):
         self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
 
     def _show_image_preview(self):
-        """Show a small preview of the captured image"""
+        """Show a small preview of the captured image if available"""
+        if not self.image_path:
+            # If no image, show a message instead
+            ttk.Label(
+                self.preview_frame,
+                text="No image - Name input only",
+                font=('Arial', int(self.screen_height * 0.02))
+            ).pack()
+            return
+            
         try:
             image = Image.open(self.image_path)
             
@@ -1063,6 +1098,11 @@ class NameInputOCR(Component):
             
         except Exception as e:
             print(f"Error displaying preview: {e}")
+            ttk.Label(
+                self.preview_frame,
+                text="Error displaying image preview",
+                font=('Arial', int(self.screen_height * 0.02))
+            ).pack()
 
     def _setup_regions(self):
         """Create the character input regions"""
