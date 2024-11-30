@@ -12,9 +12,10 @@ import numpy as np
 import cv2
 import pytesseract
 import logging
-from PIL import Image, ImageDraw
+from PIL import ImageFont, Image, ImageDraw
 
-#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
     """Base component class"""
@@ -336,8 +337,78 @@ class ImageList(Component):
             self._show_current_page()
 
     def _view_image(self, image_path):
-        """Display the selected image in a dialog"""
-        ImageViewerDialog(self.parent, image_path)
+        """Display the selected image with a simple viewer"""
+        # Clear current display
+        for widget in self.images_frame.winfo_children():
+            widget.destroy()
+            
+        try:
+            # Get image name from path
+            image_name = os.path.basename(image_path)
+            
+            # Display image name
+            name_label = ttk.Label(
+                self.images_frame,
+                text=image_name,
+                font=('Arial', int(self.parent.winfo_screenheight() * 0.03))
+            )
+            name_label.pack(pady=10)
+            
+            # Load and display image
+            image = Image.open(image_path)
+            
+            # Calculate size to maintain aspect ratio
+            display_width = min(800, self.parent.winfo_width() - 100)
+            display_height = min(600, self.parent.winfo_height() - 200)
+            
+            # Calculate scaling factor
+            width_ratio = display_width / image.width
+            height_ratio = display_height / image.height
+            scale_factor = min(width_ratio, height_ratio)
+            
+            new_width = int(image.width * scale_factor)
+            new_height = int(image.height * scale_factor)
+            
+            # Resize image
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Display image
+            image_label = ttk.Label(self.images_frame, image=photo)
+            image_label.image = photo  # Keep reference
+            image_label.pack(pady=10)
+            
+            # Back button
+            back_btn = RoundedButton(
+                self.images_frame,
+                text="Back",
+                command=self.refresh_images,
+                width=int(self.parent.winfo_screenwidth() * 0.15),
+                height=int(self.parent.winfo_screenheight() * 0.06),
+                bg_color="#4CAF50"
+            )
+            back_btn.pack(pady=20)
+            
+        except Exception as e:
+            error_label = ttk.Label(
+                self.images_frame,
+                text=f"Error displaying image: {str(e)}",
+                font=('Arial', int(self.parent.winfo_screenheight() * 0.02))
+            )
+            error_label.pack(pady=20)
+            
+            # Back button in case of error
+            back_btn = RoundedButton(
+                self.images_frame,
+                text="Back",
+                command=self.refresh_images,
+                width=int(self.parent.winfo_screenwidth() * 0.15),
+                height=int(self.parent.winfo_screenheight() * 0.06),
+                bg_color="#4CAF50"
+            )
+            back_btn.pack(pady=20)
+            """Display the selected image in a dialog"""
+            ImageViewerDialog(self.parent, image_path)
 
 class CaptureReviewComponent(Component):
     def __init__(self, parent, final_callback=None, **kwargs):
@@ -417,19 +488,71 @@ class CaptureReviewComponent(Component):
         self.bypass_button.pack(side=tk.RIGHT, padx=10)
 
     def bypass_photo(self):
-        """Skip the photo-taking process and go straight to name input"""
-        # Clear current UI
-        for widget in self.frame.winfo_children():
-            widget.destroy()
-        
-        # Show name input OCR without an image
-        self.name_input = NameInputOCR(
-            self.frame,
-            image_path=None,  # No image path when bypassing
-            on_confirm=self._handle_name_confirmation,
-            on_cancel=self._handle_name_cancel
-        )
-        self.name_input.pack(fill='both', expand=True)
+        """Skip the photo-taking process and generate a placeholder image"""
+        try:
+            # Create output directory if it doesn't exist
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+            
+            # Generate placeholder image
+            width = 800
+            height = 600
+            placeholder = Image.new('RGB', (width, height), color='lightgray')
+            
+            # Add some text to the placeholder
+            draw = ImageDraw.Draw(placeholder)
+            font_size = 40
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            except:
+                # Fallback to default font if custom font not available
+                font = ImageFont.load_default()
+            
+            text = "Placeholder Image"
+            # Get text size for centering
+            try:
+                text_width = draw.textlength(text, font=font)
+            except:
+                # Fallback for older Pillow versions
+                text_width = font_size * len(text) * 0.6
+            
+            text_position = ((width - text_width) / 2, height / 2 - font_size / 2)
+            draw.text(text_position, text, fill='black', font=font)
+            
+            # Save the placeholder image
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(self.output_dir, f"placeholder_{timestamp}.jpg")
+            placeholder.save(filename)
+            
+            # Update current image path
+            self.current_image_path = filename
+            
+            # Show name input OCR with the placeholder image
+            for widget in self.frame.winfo_children():
+                widget.destroy()
+            
+            self.name_input = NameInputOCR(
+                self.frame,
+                image_path=filename,  # Pass the placeholder image path
+                on_confirm=self._handle_name_confirmation,
+                on_cancel=self._handle_name_cancel
+            )
+            self.name_input.pack(fill='both', expand=True)
+            
+        except Exception as e:
+            print(f"Error creating placeholder image: {e}")
+            # Fallback to original bypass behavior if image creation fails
+            for widget in self.frame.winfo_children():
+                widget.destroy()
+            
+            self.name_input = NameInputOCR(
+                self.frame,
+                image_path=None,
+                on_confirm=self._handle_name_confirmation,
+                on_cancel=self._handle_name_cancel
+            )
+            self.name_input.pack(fill='both', expand=True)
+
 
     def capture_image(self):
         """Capture an image and display it for review"""
@@ -1392,8 +1515,8 @@ class OCRConfirmationDialog(Component):
         self.overlay.configure(bg='black')
         self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
         
-        # Create dialog frame with reduced width
-        dialog_width = int(self.screen_width * 0.6)  # Reduced from 0.8
+        # Further reduce dialog width
+        dialog_width = int(self.screen_width * 0.45)  # Reduced from 0.6
         dialog_height = int(self.screen_height * 0.4)
         
         self.frame.configure(
@@ -1429,12 +1552,13 @@ class OCRConfirmationDialog(Component):
             wraplength=width * 0.8
         ).pack(pady=(0, height * 0.05))
         
-        # Buttons container
-        button_frame = ttk.Frame(self.frame)
+        # Buttons container with fixed width
+        button_frame = ttk.Frame(self.frame, width=width * 0.9)  # Set fixed width
         button_frame.pack(side='bottom', pady=height * 0.05)
+        button_frame.pack_propagate(False)  # Prevent frame from shrinking
         
-        # Button dimensions - reduced width and padding
-        button_width = int(width * 0.2)  # Reduced from 0.25
+        # Even smaller buttons with minimal padding
+        button_width = int(width * 0.15)  # Reduced from 0.2
         button_height = int(height * 0.15)
         
         # Confirm button
@@ -1446,7 +1570,7 @@ class OCRConfirmationDialog(Component):
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.confirm_btn.pack(side='left', padx=width * 0.02)  # Reduced from 0.05
+        self.confirm_btn.pack(side='left', padx=width * 0.01)  # Minimal padding
         
         # Retry button
         self.retry_btn = RoundedButton(
@@ -1457,7 +1581,7 @@ class OCRConfirmationDialog(Component):
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.retry_btn.pack(side='left', padx=width * 0.02)  # Reduced from 0.05
+        self.retry_btn.pack(side='left', padx=width * 0.01)  # Minimal padding
     
     def _confirm(self):
         self.destroy()
