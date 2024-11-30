@@ -35,10 +35,11 @@ class Component:
     def destroy(self):
         self.frame.destroy()
 
+
 class RoundedButton(Component):
     """A button with rounded corners and customizable colors"""
-    def __init__(self, parent, text: str, command, bg_color: str = "#4287f5",
-                 hover_color: str = "#2c5ca6", text_color: str = "white",
+    def __init__(self, parent, text: str, command, bg_color: str = "#c6eb34",
+                 hover_color: str = "#a8cc21", text_color: str = "black",
                  width: int = None, height: int = None, corner_radius: int = 10,
                  **kwargs):
         super().__init__(parent, **kwargs)
@@ -75,8 +76,8 @@ class RoundedButton(Component):
         )
         self.canvas.itemconfig(self.shape, fill=self.bg_color, outline=self.bg_color)
         
-        # Create text
-        font_size = int(self.height * 0.3)
+        # Create text with smaller font size (reduced from 0.3 to 0.2)
+        font_size = int(self.height * 0.2)
         self.canvas_text = self.canvas.create_text(
             self.width/2,
             self.height/2,
@@ -127,6 +128,7 @@ class RoundedButton(Component):
     def _on_click(self, event):
         if self.enabled:
             self.command()
+
 class CameraPreview(Component):
     """Camera preview component that strictly follows capture.py implementation"""
     def __init__(self, parent, callback=None, **kwargs):
@@ -252,7 +254,7 @@ class ImageList(Component):
             command=self._previous_page,
             width=nav_button_width,
             height=nav_button_height,
-            bg_color="#666666"
+            bg_color="#4CAF50"
         )
         self.up_button.pack(pady=(0, 10))
 
@@ -269,7 +271,7 @@ class ImageList(Component):
             command=self._next_page,
             width=nav_button_width,
             height=nav_button_height,
-            bg_color="#666666"
+            bg_color="#4CAF50"
         )
         self.down_button.pack(pady=(10, 0))
 
@@ -315,7 +317,7 @@ class ImageList(Component):
                 command=lambda p=image_path: self._view_image(p),
                 width=button_width,
                 height=button_height,
-                bg_color="#4287f5"
+                bg_color="#4CAF50"
             )
             btn.pack(pady=10, padx=30)
 
@@ -399,7 +401,7 @@ class CaptureReviewComponent(Component):
             command=self.proceed,
             width=button_width,
             height=button_height,
-            bg_color="#2196F3"
+            bg_color="#4CAF50"
         )
         self.proceed_button.pack(side=tk.LEFT, padx=10)
         self.proceed_button.set_enabled(False)
@@ -524,7 +526,7 @@ class FlashcardApp:
             command=self.show_main_menu,
             width=width,
             height=height,
-            bg_color="#666666"
+            bg_color="#4CAF50"
         )
         back_btn.pack(anchor='nw', padx=20, pady=20)
 
@@ -551,17 +553,17 @@ class FlashcardApp:
             {
                 'text': "View Images",
                 'command': self.show_image_list,
-                'color': "#2196F3"
+                'color': "#4CAF50"
             },
             {
                 'text': "Settings",
                 'command': lambda: print("Settings clicked"),
-                'color': "#9C27B0"
+                'color': "#4CAF50"
             },
             {
                 'text': "Quit",
                 'command': self.root.quit,
-                'color': "#f44336"
+                'color': "#4CAF50"
             }
         ]
         

@@ -73,3 +73,43 @@
 2024-11-16 23:04:35,178 - DEBUG - ['C:\\Program Files\\Tesseract-OCR\\tesseract.exe', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ruf6yn9r_input.PNG', 'C:\\Users\\nicks\\AppData\\Local\\Temp\\tess_ruf6yn9r', '--psm', '10', '--oem', '3', 'txt']
 2024-11-16 23:04:35,308 - DEBUG - Region 4 recognized as: '_'
 2024-11-16 23:04:39,093 - DEBUG - Cleared all regions
+2024-11-29 21:17:39,475 - DEBUG - Created region 0 at (0, 0, 432, 432)
+2024-11-29 21:17:39,476 - DEBUG - Created region 1 at (432, 0, 864, 432)
+2024-11-29 21:17:39,476 - DEBUG - Created region 2 at (864, 0, 1296, 432)
+2024-11-29 21:17:39,476 - DEBUG - Created region 3 at (1296, 0, 1728, 432)
+2024-11-29 21:17:39,476 - DEBUG - Created region 4 at (0, 432, 432, 864)
+2024-11-29 21:17:39,476 - DEBUG - Created region 5 at (432, 432, 864, 864)
+2024-11-29 21:17:39,476 - DEBUG - Created region 6 at (864, 432, 1296, 864)
+2024-11-29 21:17:39,477 - DEBUG - Created region 7 at (1296, 432, 1728, 864)
+2024-11-29 21:17:40,992 - DEBUG - Started drawing in region 0
+2024-11-29 21:17:41,486 - DEBUG - Stopped drawing in region 0
+2024-11-29 21:17:41,853 - DEBUG - Started drawing in region 0
+2024-11-29 21:17:42,065 - DEBUG - Stopped drawing in region 0
+2024-11-29 21:17:42,659 - DEBUG - Started drawing in region 1
+2024-11-29 21:17:42,740 - DEBUG - Stopped drawing in region 1
+2024-11-29 21:17:42,772 - DEBUG - Started drawing in region 1
+2024-11-29 21:17:43,249 - DEBUG - Stopped drawing in region 1
+2024-11-29 21:17:44,579 - DEBUG - Started drawing in region 1
+2024-11-29 21:17:45,135 - DEBUG - Stopped drawing in region 1
+2024-11-29 21:17:52,455 - DEBUG - Created region 0 at (0, 0, 432, 432)
+2024-11-29 21:17:52,455 - DEBUG - Created region 1 at (432, 0, 864, 432)
+2024-11-29 21:17:52,455 - DEBUG - Created region 2 at (864, 0, 1296, 432)
+2024-11-29 21:17:52,455 - DEBUG - Created region 3 at (1296, 0, 1728, 432)
+2024-11-29 21:17:52,456 - DEBUG - Created region 4 at (0, 432, 432, 864)
+2024-11-29 21:17:52,456 - DEBUG - Created region 5 at (432, 432, 864, 864)
+2024-11-29 21:17:52,456 - DEBUG - Created region 6 at (864, 432, 1296, 864)
+2024-11-29 21:17:52,456 - DEBUG - Created region 7 at (1296, 432, 1728, 864)
+2024-11-29 21:17:53,234 - DEBUG - Started drawing in region 0
+2024-11-29 21:17:53,609 - DEBUG - Stopped drawing in region 0
+2024-11-29 22:04:35,128 - DEBUG - Created region 0 at (0, 0, 432, 432)
+2024-11-29 22:04:35,128 - DEBUG - Created region 1 at (432, 0, 864, 432)
+2024-11-29 22:04:35,128 - DEBUG - Created region 2 at (864, 0, 1296, 432)
+2024-11-29 22:04:35,129 - DEBUG - Created region 3 at (1296, 0, 1728, 432)
+2024-11-29 22:04:35,129 - DEBUG - Created region 4 at (0, 432, 432, 864)
+2024-11-29 22:04:35,129 - DEBUG - Created region 5 at (432, 432, 864, 864)
+2024-11-29 22:04:35,129 - DEBUG - Created region 6 at (864, 432, 1296, 864)
+2024-11-29 22:04:35,129 - DEBUG - Created region 7 at (1296, 432, 1728, 864)
+2024-11-29 22:04:35,992 - DEBUG - Started drawing in region 0
+2024-11-29 22:04:36,362 - DEBUG - Stopped drawing in region 0
+2024-11-29 22:04:36,597 - DEBUG - Started drawing in region 0
+2024-11-29 22:04:36,728 - DEBUG - Stopped drawing in region 0
