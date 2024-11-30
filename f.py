@@ -15,6 +15,11 @@ import logging
 from PIL import ImageFont, Image, ImageDraw
 
 
+#Fix buttons sizes
+#Translate the photo name
+#
+
+
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
@@ -1135,101 +1140,155 @@ class NameInputOCR(Component):
         # Calculate dimensions based on screen size
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
-        self.region_size = int(self.screen_width * 0.08)
-        self.num_regions = 8
-        self.line_width = max(1, int(self.region_size * 0.03))
         
-        # Initialize the result label at class level
+        # Increase region size for vertical screens
+        self.region_size = int(self.screen_width * 0.1)  # Increased from 0.08
+        self.num_regions = 6  # Reduced from 8 for better fit
+        self.line_width = max(2, int(self.region_size * 0.04))  # Increased line thickness
+        
         self.result_label = None
-        self.current_text = ""  # Add this to track the current text
+        self.current_text = ""
         
-        # Initialize drawing state
         self.drawing = False
         self.current_region = None
         self.last_x = None
         self.last_y = None
         
-        # Create the UI
         self._create_ui()
         self._setup_regions()
         self._create_controls()
 
     def _create_ui(self):
-        """Create the main UI components"""
+        """Create the main UI components with vertical layout optimization"""
+        # Container for all elements
+        self.main_container = ttk.Frame(self.frame)
+        self.main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Top section (30% of height)
+        self.top_section = ttk.Frame(self.main_container)
+        self.top_section.pack(fill=tk.BOTH, expand=True, pady=5)
+        
         # Title
         self.title_label = ttk.Label(
-            self.frame,
+            self.top_section,
             text="Write Image Name",
-            font=('Arial', int(self.screen_height * 0.03), 'bold')
+            font=('Arial', int(self.screen_height * 0.04), 'bold')
         )
-        self.title_label.pack(pady=10)
+        self.title_label.pack(pady=5)
 
-        # Instructions
+        # Instructions with larger font
         self.instructions = ttk.Label(
-            self.frame,
-            text="Write one character per box to name your image",
-            font=('Arial', int(self.screen_height * 0.02))
+            self.top_section,
+            text="Write one character per box",
+            font=('Arial', int(self.screen_height * 0.025))
         )
-        self.instructions.pack(pady=5)
+        self.instructions.pack(pady=2)
 
-        # Preview of captured image
-        self.preview_frame = ttk.Frame(self.frame)
-        self.preview_frame.pack(pady=10)
-        self._show_image_preview()
+        # Preview (if available)
+        if self.image_path:
+            self.preview_frame = ttk.Frame(self.top_section)
+            self.preview_frame.pack(pady=5)
+            self._show_image_preview()
 
-        # Canvas for character input
-        canvas_container = ttk.Frame(self.frame)
-        canvas_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        # Canvas section (40% of height)
+        canvas_container = ttk.Frame(self.main_container)
+        canvas_container.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        total_width = self.num_regions * self.region_size
+        # Calculate canvas size based on screen dimensions
+        canvas_width = min(self.screen_width * 0.9, self.num_regions * self.region_size)
+        canvas_height = int(self.screen_height * 0.2)  # Increased height
+        
         self.canvas = tk.Canvas(
             canvas_container,
-            width=total_width,
-            height=self.region_size,
+            width=canvas_width,
+            height=canvas_height,
             highlightthickness=2,
             highlightbackground="gray",
             bg="white"
         )
         self.canvas.pack(expand=True)
         
-        # Result label - Added after canvas
+        # Result label with larger font
         self.result_label = ttk.Label(
-            self.frame,
-            text="",  # Empty initially
-            font=('Arial', int(self.screen_height * 0.02))
+            self.main_container,
+            text="",
+            font=('Arial', int(self.screen_height * 0.03))
         )
-        self.result_label.pack(pady=10)  # Make sure to pack it!
-        
-        # Bind events
-        self.canvas.bind("<Button-1>", self._start_drawing)
-        self.canvas.bind("<B1-Motion>", self._draw)
-        self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
+        self.result_label.pack(pady=5)
 
+    def _create_controls(self):
+        """Create control buttons optimized for vertical layout"""
+        # Button container
+        control_frame = ttk.Frame(self.main_container)
+        control_frame.pack(fill=tk.X, pady=5)
+        
+        # Create two rows of buttons
+        top_row = ttk.Frame(control_frame)
+        top_row.pack(fill=tk.X, pady=2)
+        
+        bottom_row = ttk.Frame(control_frame)
+        bottom_row.pack(fill=tk.X, pady=2)
+        
+        # Calculate button dimensions
+        button_width = int(self.screen_width * 0.4)  # Wider buttons
+        button_height = int(self.screen_height * 0.08)  # Taller buttons
+        
+        # Top row buttons
+        self.ocr_btn = RoundedButton(
+            top_row,
+            text="Read Text",
+            command=self._perform_ocr,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.ocr_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.clear_btn = RoundedButton(
+            top_row,
+            text="Clear",
+            command=self.clear_all,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.clear_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Bottom row buttons
+        self.save_btn = RoundedButton(
+            bottom_row,
+            text="Save",
+            command=self._save_and_proceed,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.save_btn.pack(side=tk.LEFT, padx=5)
+        self.save_btn.set_enabled(False)
+        
+        self.cancel_btn = RoundedButton(
+            bottom_row,
+            text="Cancel",
+            command=self._cancel,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.cancel_btn.pack(side=tk.RIGHT, padx=5)
 
     def _show_image_preview(self):
-        """Show a small preview of the captured image if available"""
-        if not self.image_path:
-            # If no image, show a message instead
-            ttk.Label(
-                self.preview_frame,
-                text="No image - Name input only",
-                font=('Arial', int(self.screen_height * 0.02))
-            ).pack()
-            return
-            
+        """Show a smaller preview of the captured image"""
         try:
             image = Image.open(self.image_path)
             
-            # Calculate preview size
-            preview_height = int(self.screen_height * 0.2)
+            # Calculate smaller preview size
+            preview_height = int(self.screen_height * 0.15)  # Reduced preview size
             aspect_ratio = image.width / image.height
             preview_width = int(preview_height * aspect_ratio)
             
-            # Resize image
             image = image.resize((preview_width, preview_height), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(image)
             
-            # Display image
             self.preview_label = ttk.Label(self.preview_frame, image=photo)
             self.preview_label.image = photo
             self.preview_label.pack()
@@ -1238,258 +1297,9 @@ class NameInputOCR(Component):
             print(f"Error displaying preview: {e}")
             ttk.Label(
                 self.preview_frame,
-                text="Error displaying image preview",
+                text="Error displaying preview",
                 font=('Arial', int(self.screen_height * 0.02))
             ).pack()
-
-    def _setup_regions(self):
-        """Create the character input regions"""
-        self.regions = []
-        self.region_images = []
-        
-        start_x = 0
-        start_y = 0
-        
-        for i in range(self.num_regions):
-            x1 = start_x + i * self.region_size
-            y1 = start_y
-            x2 = x1 + self.region_size
-            y2 = y1 + self.region_size
-            
-            region = self.canvas.create_rectangle(
-                x1, y1, x2, y2,
-                outline="#2196F3",
-                width=2
-            )
-            
-            self.regions.append({
-                'id': region,
-                'coords': (x1, y1, x2, y2)
-            })
-            
-            img = Image.new('L', (self.region_size, self.region_size), 'white')
-            self.region_images.append(img)
-
-    def _create_controls(self):
-        """Create control buttons"""
-        control_frame = ttk.Frame(self.frame)
-        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
-        
-        button_width = int(self.screen_width * 0.2)
-        button_height = int(self.screen_height * 0.1)
-        
-        # OCR button to read characters
-        self.ocr_btn = RoundedButton(
-            control_frame,
-            text="Read Text",
-            command=self._perform_ocr,
-            width=button_width,
-            height=button_height,
-            bg_color="#c6eb34"
-        )
-        self.ocr_btn.pack(side=tk.LEFT, padx=20)
-        
-        # Save button (initially disabled)
-        self.save_btn = RoundedButton(
-            control_frame,
-            text="Save",
-            command=self._save_and_proceed,
-            width=button_width,
-            height=button_height,
-            bg_color="#c6eb34"
-        )
-        self.save_btn.pack(side=tk.LEFT, padx=20)
-        self.save_btn.set_enabled(False)  # Disabled until OCR is performed
-        
-        # Clear button
-        self.clear_btn = RoundedButton(
-            control_frame,
-            text="Clear",
-            command=self.clear_all,
-            width=button_width,
-            height=button_height,
-            bg_color="#c6eb34"
-        )
-        self.clear_btn.pack(side=tk.LEFT, padx=20)
-        
-        # Cancel button
-        self.cancel_btn = RoundedButton(
-            control_frame,
-            text="Cancel",
-            command=self._cancel,
-            width=button_width,
-            height=button_height,
-            bg_color="#c6eb34"
-        )
-        self.cancel_btn.pack(side=tk.RIGHT, padx=20)
-
-
-
-    def _perform_ocr(self):
-        """Process the written characters and show result"""
-        results = []
-        for img in self.region_images:
-            img_array = np.array(img)
-            _, thresh = cv2.threshold(
-                img_array, 0, 255,
-                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-            )
-            
-            text = pytesseract.image_to_string(
-                thresh,
-                config='--psm 10 --oem 3'
-            ).strip()
-            
-            if text:  # Only append non-empty results
-                results.append(text)
-        
-        if results:
-            # Join characters and clean the filename
-            self.current_text = ''.join(results)
-            self.current_text = ''.join(c for c in self.current_text if c.isalnum() or c in '._- ')
-            
-            # Update result label and enable save button
-            self.result_label.configure(text=f"Recognized text: {self.current_text}")
-            self.save_btn.set_enabled(True)
-        else:
-            self.current_text = ""  # Set empty text if no results
-            self.result_label.configure(text="No text detected. Please try again.")
-            self.save_btn.set_enabled(False)
-
-
-    def _save_and_proceed(self):
-        """Save the recognized text and proceed"""
-        if hasattr(self, 'current_text') and self.current_text:
-            if self.on_confirm:
-                self.on_confirm(self.current_text)
-
-    def clear_all(self):
-        """Clear all regions and reset UI"""
-        super().clear_all()  # Call existing clear method
-        self.result_label.config(text="")  # Clear result text
-        self.save_btn.set_enabled(False)  # Disable save button
-
-
-    def _confirm_name(self):
-        """Process the written characters and confirm the name"""
-        results = []
-        for img in self.region_images:
-            img_array = np.array(img)
-            _, thresh = cv2.threshold(
-                img_array, 0, 255,
-                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-            )
-            
-            text = pytesseract.image_to_string(
-                thresh,
-                config='--psm 10 --oem 3'
-            ).strip()
-            
-            if text:  # Only append non-empty results
-                results.append(text)
-        
-        if results:
-            # Join characters and clean the filename
-            filename = ''.join(results)
-            filename = ''.join(c for c in filename if c.isalnum() or c in '._- ')
-            
-            # Show confirmation dialog
-            OCRConfirmationDialog(
-                self.parent,
-                filename,
-                on_confirm=lambda name: self._handle_confirmation(name),
-                on_retry=self.clear_all
-            )
-        else:
-            # Show error if no characters were recognized
-            self._show_error("No characters detected. Please write a name.")
-
-    def _handle_confirmation(self, filename):
-        """Handle confirmed filename"""
-        if self.on_confirm:
-            self.on_confirm(filename)
-
-    def _show_error(self, message):
-        """Show error message to user"""
-        tk.messagebox.showerror("Error", message)
-
-    def _cancel(self):
-        """Handle cancel button click"""
-        if self.on_cancel:
-            self.on_cancel()
-
-    # Drawing methods (similar to original OCR component)
-    def _start_drawing(self, event):
-        self.drawing = False
-        self.current_region = None
-        
-        for i, region in enumerate(self.regions):
-            x1, y1, x2, y2 = region['coords']
-            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-                self.drawing = True
-                self.current_region = i
-                self.last_x = event.x - x1
-                self.last_y = event.y - y1
-                break
-
-    def _draw(self, event):
-        if not self.drawing or self.current_region is None:
-            return
-            
-        region = self.regions[self.current_region]
-        x1, y1, x2, y2 = region['coords']
-        
-        if not (x1 <= event.x <= x2 and y1 <= event.y <= y2):
-            return
-            
-        curr_x = event.x - x1
-        curr_y = event.y - y1
-        
-        self.canvas.create_line(
-            event.x, event.y,
-            self.last_x + x1, self.last_y + y1,
-            width=self.line_width,
-            fill="black",
-            capstyle=tk.ROUND,
-            smooth=True
-        )
-        
-        draw = ImageDraw.Draw(self.region_images[self.current_region])
-        draw.line(
-            [self.last_x, self.last_y, curr_x, curr_y],
-            fill="black",
-            width=self.line_width
-        )
-        
-        self.last_x = curr_x
-        self.last_y = curr_y
-
-    def _stop_drawing(self, event):
-        self.drawing = False
-
-    def clear_all(self):
-        """Clear all regions"""
-        for region in self.regions:
-            coords = region['coords']
-            self.canvas.create_rectangle(
-                coords[0], coords[1], coords[2], coords[3],
-                fill="white",
-                outline="#2196F3",
-                width=2
-            )
-        
-        self.region_images = [
-            Image.new('L', (self.region_size, self.region_size), 'white')
-            for _ in range(self.num_regions)
-        ]
-        
-        # Update the result label text
-        if self.result_label:
-            self.result_label.configure(text="")  # Clear result text
-            
-        if hasattr(self, 'save_btn'):
-            self.save_btn.set_enabled(False)  # Disable save button
-
 
 class OCRConfirmationDialog(Component):
     """Custom dialog for confirming OCR results"""
