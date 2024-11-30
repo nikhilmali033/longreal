@@ -341,9 +341,9 @@ class ImageList(Component):
         print(f"Viewing image: {image_path}")
 
 class CaptureReviewComponent(Component):
-    def __init__(self, parent, callback=None, **kwargs):
+    def __init__(self, parent, final_callback=None, **kwargs):
         super().__init__(parent, **kwargs)
-        self.callback = callback
+        self.final_callback = final_callback
         self.output_dir = "captured_images"
         self.current_image_path = None
         
@@ -353,141 +353,54 @@ class CaptureReviewComponent(Component):
         self._create_ui()
         
     def _create_ui(self):
-        # Top status message
-        self.status_label = ttk.Label(
-            self.frame,
-            text="Take a picture to begin",
-            font=('Arial', int(self.parent.winfo_screenheight() * 0.02)),
-            justify=tk.CENTER,
-            wraplength=400
-        )
-        self.status_label.pack(pady=20)
-        
-        # Image display area
-        self.image_frame = ttk.Frame(
-            self.frame,
-            relief="solid",
-            borderwidth=1
-        )
-        self.image_frame.pack(padx=20, pady=10, fill=tk.BOTH, expand=True)
-        
-        # Image label within frame
-        self.image_label = ttk.Label(self.image_frame)
-        self.image_label.pack(padx=10, pady=10)
-        
-        # Button frame
-        self.button_frame = ttk.Frame(self.frame)
-        self.button_frame.pack(pady=20)
-        
-        # Calculate button dimensions
-        button_width = int(self.parent.winfo_screenwidth() * 0.15)
-        button_height = int(self.parent.winfo_screenheight() * 0.08)
-        
-        # Capture button
-        self.capture_button = RoundedButton(
-            self.button_frame,
-            text="Capture Image",
-            command=self.capture_image,
-            width=button_width,
-            height=button_height,
-            bg_color="#4CAF50"
-        )
-        self.capture_button.pack(side=tk.LEFT, padx=10)
-        
-        # Proceed button
-        self.proceed_button = RoundedButton(
-            self.button_frame,
-            text="Proceed",
-            command=self.proceed,
-            width=button_width,
-            height=button_height,
-            bg_color="#4CAF50"
-        )
-        self.proceed_button.pack(side=tk.LEFT, padx=10)
-        self.proceed_button.set_enabled(False)
-
-    def capture_image(self):
-        """Capture an image and display it for review"""
-        try:
-            # Update UI
-            self.status_label.config(text="Capturing image...")
-            self.capture_button.set_enabled(False)
-            self.proceed_button.set_enabled(False)
-            self.parent.update()
-            
-            # Generate filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.output_dir, f"image_{timestamp}.jpg")
-            
-            # Capture image
-            cmd = [
-                "libcamera-jpeg",
-                "--qt",
-                "-o", filename,
-                "--width", "2304",
-                "--height", "1296",
-                "--nopreview"
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            
-            # Display the captured image
-            self.display_image(filename)
-            self.current_image_path = filename
-            
-            # Update UI
-            self.status_label.config(
-                text="Image captured! Review the image and proceed, or capture again."
-            )
-            self.proceed_button.set_enabled(True)
-            
-        except Exception as e:
-            self.status_label.config(text=f"Error capturing image: {str(e)}")
-            print(f"Capture error: {e}")
-        finally:
-            self.capture_button.set_enabled(True)
-
-    def display_image(self, image_path):
-        """Display an image in the UI"""
-        try:
-            # Open and resize image to fit display
-            image = Image.open(image_path)
-            
-            # Calculate size to maintain aspect ratio
-            display_width = min(800, self.parent.winfo_width() - 100)
-            display_height = min(600, self.parent.winfo_height() - 200)
-            
-            # Calculate scaling factor
-            width_ratio = display_width / image.width
-            height_ratio = display_height / image.height
-            scale_factor = min(width_ratio, height_ratio)
-            
-            new_width = int(image.width * scale_factor)
-            new_height = int(image.height * scale_factor)
-            
-            # Resize image
-            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to PhotoImage
-            photo = ImageTk.PhotoImage(image)
-            
-            # Update label
-            self.image_label.configure(image=photo)
-            self.image_label.image = photo  # Keep a reference!
-            
-        except Exception as e:
-            self.status_label.config(text=f"Error displaying image: {str(e)}")
-            print(f"Display error: {e}")
+        # (Previous UI creation code remains the same until the proceed method)
+        [...]
 
     def proceed(self):
         """Handle proceed button click"""
-        if self.current_image_path and self.callback:
-            self.callback(self.current_image_path)
+        if self.current_image_path:
+            # Clear current UI
+            for widget in self.frame.winfo_children():
+                widget.destroy()
+            
+            # Show name input OCR
+            self.name_input = NameInputOCR(
+                self.frame,
+                self.current_image_path,
+                on_confirm=self._handle_name_confirmation,
+                on_cancel=self._handle_name_cancel
+            )
+            self.name_input.pack(fill='both', expand=True)
+
+    def _handle_name_confirmation(self, new_name):
+        """Handle the confirmed name from OCR"""
+        try:
+            # Generate new filename
+            file_ext = os.path.splitext(self.current_image_path)[1]
+            new_filename = f"{new_name}{file_ext}"
+            new_path = os.path.join(self.output_dir, new_filename)
+            
+            # Rename file
+            os.rename(self.current_image_path, new_path)
+            
+            # Call final callback with new path
+            if self.final_callback:
+                self.final_callback(new_path)
+                
+        except Exception as e:
+            tk.messagebox.showerror(
+                "Error",
+                f"Failed to save image with new name: {str(e)}"
+            )
+            
+    def _handle_name_cancel(self):
+        """Handle cancellation of name input"""
+        # Restore original capture review UI
+        self.name_input.destroy()
+        self._create_ui()
+        if self.current_image_path:
+            self.display_image(self.current_image_path)
+
 class FlashcardApp:
     """Main application class"""
     def __init__(self, root):
@@ -591,12 +504,18 @@ class FlashcardApp:
         )
         title.pack(pady=30)
         
-        # Create camera preview with callback for image capture
+        # Create capture review with final callback
         self.current_component = CaptureReviewComponent(
             self.container,
-            callback=self._on_image_captured
+            final_callback=self._on_final_image_saved
         )
         self.current_component.pack(fill='both', expand=True, padx=30, pady=(0, 30))
+
+    def _on_final_image_saved(self, final_image_path):
+        """Callback for when an image is saved with its new name"""
+        print(f"Image saved with new name: {final_image_path}")
+        # Show the image list after successful save
+        self.show_image_list()
 
     def show_image_list(self):
         self.clear_container()
@@ -926,6 +845,267 @@ class CharacterOCRComponent(Component):
             bg_color="#666666"
         )
         close_btn.pack(pady=20)
+
+class NameInputOCR(Component):
+    """OCR component specifically for inputting image names"""
+    def __init__(self, parent, image_path, on_confirm=None, on_cancel=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.image_path = image_path
+        self.on_confirm = on_confirm
+        self.on_cancel = on_cancel
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        self.region_size = int(self.screen_width * 0.12)  # Slightly larger boxes for text
+        self.num_regions = 8  # Allow for longer names
+        self.line_width = max(2, int(self.region_size * 0.03))
+        
+        self._create_ui()
+        self._setup_regions()
+        self._create_controls()
+        
+        # Initialize drawing state
+        self.drawing = False
+        self.current_region = None
+        self.last_x = None
+        self.last_y = None
+
+    def _create_ui(self):
+        """Create the main UI components"""
+        # Title
+        self.title_label = ttk.Label(
+            self.frame,
+            text="Write Image Name",
+            font=('Arial', int(self.screen_height * 0.03), 'bold')
+        )
+        self.title_label.pack(pady=10)
+
+        # Instructions
+        self.instructions = ttk.Label(
+            self.frame,
+            text="Write one character per box to name your image",
+            font=('Arial', int(self.screen_height * 0.02))
+        )
+        self.instructions.pack(pady=5)
+
+        # Preview of captured image
+        self.preview_frame = ttk.Frame(self.frame)
+        self.preview_frame.pack(pady=10)
+        self._show_image_preview()
+
+        # Canvas for character input
+        canvas_container = ttk.Frame(self.frame)
+        canvas_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        total_width = self.num_regions * self.region_size
+        self.canvas = tk.Canvas(
+            canvas_container,
+            width=total_width,
+            height=self.region_size,
+            highlightthickness=2,
+            highlightbackground="gray",
+            bg="white"
+        )
+        self.canvas.pack(expand=True)
+        
+        # Bind events
+        self.canvas.bind("<Button-1>", self._start_drawing)
+        self.canvas.bind("<B1-Motion>", self._draw)
+        self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
+
+    def _show_image_preview(self):
+        """Show a small preview of the captured image"""
+        try:
+            image = Image.open(self.image_path)
+            
+            # Calculate preview size
+            preview_height = int(self.screen_height * 0.2)
+            aspect_ratio = image.width / image.height
+            preview_width = int(preview_height * aspect_ratio)
+            
+            # Resize image
+            image = image.resize((preview_width, preview_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Display image
+            self.preview_label = ttk.Label(self.preview_frame, image=photo)
+            self.preview_label.image = photo
+            self.preview_label.pack()
+            
+        except Exception as e:
+            print(f"Error displaying preview: {e}")
+
+    def _setup_regions(self):
+        """Create the character input regions"""
+        self.regions = []
+        self.region_images = []
+        
+        start_x = 0
+        start_y = 0
+        
+        for i in range(self.num_regions):
+            x1 = start_x + i * self.region_size
+            y1 = start_y
+            x2 = x1 + self.region_size
+            y2 = y1 + self.region_size
+            
+            region = self.canvas.create_rectangle(
+                x1, y1, x2, y2,
+                outline="#2196F3",
+                width=2
+            )
+            
+            self.regions.append({
+                'id': region,
+                'coords': (x1, y1, x2, y2)
+            })
+            
+            img = Image.new('L', (self.region_size, self.region_size), 'white')
+            self.region_images.append(img)
+
+    def _create_controls(self):
+        """Create control buttons"""
+        control_frame = ttk.Frame(self.frame)
+        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=20)
+        
+        button_width = int(self.screen_width * 0.15)
+        button_height = int(self.screen_height * 0.06)
+        
+        # Confirm button
+        self.confirm_btn = RoundedButton(
+            control_frame,
+            text="Confirm Name",
+            command=self._confirm_name,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.confirm_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Clear button
+        self.clear_btn = RoundedButton(
+            control_frame,
+            text="Clear",
+            command=self.clear_all,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.clear_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Cancel button
+        self.cancel_btn = RoundedButton(
+            control_frame,
+            text="Cancel",
+            command=self._cancel,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.cancel_btn.pack(side=tk.RIGHT, padx=20)
+
+    def _confirm_name(self):
+        """Process the written characters and confirm the name"""
+        results = []
+        for img in self.region_images:
+            img_array = np.array(img)
+            _, thresh = cv2.threshold(
+                img_array, 0, 255,
+                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
+            
+            text = pytesseract.image_to_string(
+                thresh,
+                config='--psm 10 --oem 3'
+            ).strip()
+            
+            if text:  # Only append non-empty results
+                results.append(text)
+        
+        if results:
+            # Join characters and clean the filename
+            filename = ''.join(results)
+            filename = ''.join(c for c in filename if c.isalnum() or c in '._- ')
+            if self.on_confirm:
+                self.on_confirm(filename)
+        else:
+            # Show error if no characters were recognized
+            self._show_error("No characters detected. Please write a name.")
+
+    def _show_error(self, message):
+        """Show error message to user"""
+        tk.messagebox.showerror("Error", message)
+
+    def _cancel(self):
+        """Handle cancel button click"""
+        if self.on_cancel:
+            self.on_cancel()
+
+    # Drawing methods (similar to original OCR component)
+    def _start_drawing(self, event):
+        self.drawing = False
+        self.current_region = None
+        
+        for i, region in enumerate(self.regions):
+            x1, y1, x2, y2 = region['coords']
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self.drawing = True
+                self.current_region = i
+                self.last_x = event.x - x1
+                self.last_y = event.y - y1
+                break
+
+    def _draw(self, event):
+        if not self.drawing or self.current_region is None:
+            return
+            
+        region = self.regions[self.current_region]
+        x1, y1, x2, y2 = region['coords']
+        
+        if not (x1 <= event.x <= x2 and y1 <= event.y <= y2):
+            return
+            
+        curr_x = event.x - x1
+        curr_y = event.y - y1
+        
+        self.canvas.create_line(
+            event.x, event.y,
+            self.last_x + x1, self.last_y + y1,
+            width=self.line_width,
+            fill="black",
+            capstyle=tk.ROUND,
+            smooth=True
+        )
+        
+        draw = ImageDraw.Draw(self.region_images[self.current_region])
+        draw.line(
+            [self.last_x, self.last_y, curr_x, curr_y],
+            fill="black",
+            width=self.line_width
+        )
+        
+        self.last_x = curr_x
+        self.last_y = curr_y
+
+    def _stop_drawing(self, event):
+        self.drawing = False
+
+    def clear_all(self):
+        """Clear all regions"""
+        for region in self.regions:
+            coords = region['coords']
+            self.canvas.create_rectangle(
+                coords[0], coords[1], coords[2], coords[3],
+                fill="white",
+                outline="#2196F3",
+                width=2
+            )
+        
+        self.region_images = [
+            Image.new('L', (self.region_size, self.region_size), 'white')
+            for _ in range(self.num_regions)
+        ]
 
 def main():
     root = tk.Tk()
