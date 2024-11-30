@@ -801,7 +801,7 @@ class FlashcardApp:
         grid_frame.place(relx=0.5, rely=0.5, anchor='center')
         
         # Calculate button dimensions - reduced size
-        button_width = int(self.root.winfo_screenwidth() * 0.25)  # Reduced from 0.325
+        button_width = int(self.root.winfo_screenwidth() * 0.5)  # Reduced from 0.325
         button_height = button_width  # Keep square
         
         buttons = [
