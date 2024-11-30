@@ -17,10 +17,9 @@ from PIL import ImageFont, Image, ImageDraw
 
 #Fix buttons sizes
 #Translate the photo name
-#
 
 
-#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class Component:
     """Base component class"""
@@ -1130,7 +1129,6 @@ class CharacterOCRComponent(Component):
         close_btn.pack(pady=20)
 
 class NameInputOCR(Component):
-    """OCR component specifically for inputting image names"""
     def __init__(self, parent, image_path, on_confirm=None, on_cancel=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.image_path = image_path
@@ -1141,10 +1139,15 @@ class NameInputOCR(Component):
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
         
-        # Increase region size for vertical screens
-        self.region_size = int(self.screen_width * 0.1)  # Increased from 0.08
-        self.num_regions = 6  # Reduced from 8 for better fit
-        self.line_width = max(2, int(self.region_size * 0.04))  # Increased line thickness
+        # Grid layout configuration
+        self.num_rows = 1
+        self.boxes_per_row = 8
+        self.num_regions = self.num_rows * self.boxes_per_row
+        
+        # Reduce region size - using smaller percentage of screen width
+        usable_width = self.screen_width * 0.9  # Reduced from 0.9
+        self.region_size = int(usable_width / self.boxes_per_row)
+        self.line_width = max(2, int(self.region_size * 0.04))
         
         self.result_label = None
         self.current_text = ""
@@ -1154,9 +1157,43 @@ class NameInputOCR(Component):
         self.last_x = None
         self.last_y = None
         
+        # Initialize regions list
+        self.regions = []
+        self.region_images = []
+        
         self._create_ui()
         self._setup_regions()
         self._create_controls()
+
+    def _setup_regions(self):
+        """Create the character regions in a grid layout"""
+        self.regions.clear()
+        self.region_images.clear()
+        
+        for row in range(self.num_rows):
+            for col in range(self.boxes_per_row):
+                # Calculate coordinates for this region
+                x1 = col * self.region_size
+                y1 = row * self.region_size
+                x2 = x1 + self.region_size
+                y2 = y1 + self.region_size
+                
+                # Create region rectangle
+                region = self.canvas.create_rectangle(
+                    x1, y1, x2, y2,
+                    outline="#2196F3",  # Material Blue
+                    width=2
+                )
+                
+                # Store region info
+                self.regions.append({
+                    'id': region,
+                    'coords': (x1, y1, x2, y2)
+                })
+                
+                # Create image buffer
+                img = Image.new('L', (self.region_size, self.region_size), 'white')
+                self.region_images.append(img)
 
     def _create_ui(self):
         """Create the main UI components with vertical layout optimization"""
@@ -1164,7 +1201,7 @@ class NameInputOCR(Component):
         self.main_container = ttk.Frame(self.frame)
         self.main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Top section (30% of height)
+        # Top section
         self.top_section = ttk.Frame(self.main_container)
         self.top_section.pack(fill=tk.BOTH, expand=True, pady=5)
         
@@ -1190,13 +1227,13 @@ class NameInputOCR(Component):
             self.preview_frame.pack(pady=5)
             self._show_image_preview()
 
-        # Canvas section (40% of height)
+        # Canvas section
         canvas_container = ttk.Frame(self.main_container)
         canvas_container.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        # Calculate canvas size based on screen dimensions
-        canvas_width = min(self.screen_width * 0.9, self.num_regions * self.region_size)
-        canvas_height = int(self.screen_height * 0.2)  # Increased height
+        # Calculate canvas size based on grid layout
+        canvas_width = self.region_size * self.boxes_per_row
+        canvas_height = self.region_size * self.num_rows
         
         self.canvas = tk.Canvas(
             canvas_container,
@@ -1215,6 +1252,11 @@ class NameInputOCR(Component):
             font=('Arial', int(self.screen_height * 0.03))
         )
         self.result_label.pack(pady=5)
+        
+        # Bind events
+        self.canvas.bind("<Button-1>", self._start_drawing)
+        self.canvas.bind("<B1-Motion>", self._draw)
+        self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
 
     def _create_controls(self):
         """Create control buttons optimized for vertical layout"""
@@ -1300,6 +1342,113 @@ class NameInputOCR(Component):
                 text="Error displaying preview",
                 font=('Arial', int(self.screen_height * 0.02))
             ).pack()
+
+    def _start_drawing(self, event):
+        self.drawing = False
+        self.current_region = None
+        
+        for i, region in enumerate(self.regions):
+            x1, y1, x2, y2 = region['coords']
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self.drawing = True
+                self.current_region = i
+                self.last_x = event.x - x1
+                self.last_y = event.y - y1
+                break
+
+    def _draw(self, event):
+        if not self.drawing or self.current_region is None:
+            return
+            
+        region = self.regions[self.current_region]
+        x1, y1, x2, y2 = region['coords']
+        
+        if not (x1 <= event.x <= x2 and y1 <= event.y <= y2):
+            return
+            
+        curr_x = event.x - x1
+        curr_y = event.y - y1
+        
+        self.canvas.create_line(
+            event.x, event.y,
+            self.last_x + x1, self.last_y + y1,
+            width=self.line_width,
+            fill="black",
+            capstyle=tk.ROUND,
+            smooth=True
+        )
+        
+        draw = ImageDraw.Draw(self.region_images[self.current_region])
+        draw.line(
+            [self.last_x, self.last_y, curr_x, curr_y],
+            fill="black",
+            width=self.line_width
+        )
+        
+        self.last_x = curr_x
+        self.last_y = curr_y
+
+    def _stop_drawing(self, event):
+        self.drawing = False
+
+    def clear_all(self):
+        """Clear all regions"""
+        for region in self.regions:
+            coords = region['coords']
+            self.canvas.create_rectangle(
+                coords[0], coords[1], coords[2], coords[3],
+                fill="white",
+                outline="#2196F3",
+                width=2
+            )
+        
+        self.region_images = [
+            Image.new('L', (self.region_size, self.region_size), 'white')
+            for _ in range(self.num_regions)
+        ]
+        
+        if self.result_label:
+            self.result_label.configure(text="")
+            
+        if hasattr(self, 'save_btn'):
+            self.save_btn.set_enabled(False)
+
+    def _perform_ocr(self):
+        """Process the written characters and show result"""
+        results = []
+        for img in self.region_images:
+            img_array = np.array(img)
+            _, thresh = cv2.threshold(
+                img_array, 0, 255,
+                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
+            
+            text = pytesseract.image_to_string(
+                thresh,
+                config='--psm 10 --oem 3'
+            ).strip()
+            
+            if text:  # Only append non-empty results
+                results.append(text)
+        
+        if results:
+            self.current_text = ''.join(results)
+            self.current_text = ''.join(c for c in self.current_text if c.isalnum() or c in '._- ')
+            self.result_label.configure(text=f"Recognized text: {self.current_text}")
+            self.save_btn.set_enabled(True)
+        else:
+            self.current_text = ""
+            self.result_label.configure(text="No text detected. Please try again.")
+            self.save_btn.set_enabled(False)
+
+    def _save_and_proceed(self):
+        if hasattr(self, 'current_text') and self.current_text:
+            if self.on_confirm:
+                self.on_confirm(self.current_text)
+
+    def _cancel(self):
+        if self.on_cancel:
+            self.on_cancel()
 
 class OCRConfirmationDialog(Component):
     """Custom dialog for confirming OCR results"""

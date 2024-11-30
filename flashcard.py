@@ -12,7 +12,12 @@ import numpy as np
 import cv2
 import pytesseract
 import logging
-from PIL import Image, ImageDraw
+from PIL import ImageFont, Image, ImageDraw
+
+
+#Fix buttons sizes
+#Translate the photo name
+
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -51,10 +56,10 @@ class RoundedButton(Component):
         self.disabled_color = "#cccccc"
         self.enabled = True
         
-        # Default sizes based on screen size
-        self.width = width or int(parent.winfo_screenwidth() * 0.15)
-        self.height = height or int(parent.winfo_screenheight() * 0.08)
-        self.corner_radius = corner_radius
+        # Smaller default sizes for small screens
+        self.width = width or int(parent.winfo_screenwidth() * 0.12)  # Reduced from 0.15
+        self.height = height or int(parent.winfo_screenheight() * 0.06)  # Reduced from 0.08
+        self.corner_radius = min(corner_radius, self.height // 4)  # Scale radius with height
         
         self._create_button()
 
@@ -77,7 +82,7 @@ class RoundedButton(Component):
         self.canvas.itemconfig(self.shape, fill=self.bg_color, outline=self.bg_color)
         
         # Create text with smaller font size (reduced from 0.3 to 0.2)
-        font_size = int(self.height * 0.2)
+        font_size = int(self.height * 0.15)  # Reduced from 0.2
         self.canvas_text = self.canvas.create_text(
             self.width/2,
             self.height/2,
@@ -239,14 +244,15 @@ class ImageList(Component):
     def _create_ui(self):
         # Navigation buttons container
         nav_frame = ttk.Frame(self.frame)
-        nav_frame.pack(side='right', fill='y', padx=20)
+        nav_frame.pack(side='right', fill='y', padx=5)  # Reduced padding
 
-        # Calculate button sizes
+        # Smaller navigation buttons
+        nav_button_width = int(self.parent.winfo_screenwidth() * 0.06)  # Reduced from 0.08
+        nav_button_height = int(self.parent.winfo_screenheight() * 0.10)  # Reduced from 0.15
+
+
         screen_width = self.parent.winfo_screenwidth()
         screen_height = self.parent.winfo_screenheight()
-        nav_button_width = int(screen_width * 0.08)
-        nav_button_height = int(screen_height * 0.15)
-
         # Navigation buttons
         self.up_button = RoundedButton(
             nav_frame,
@@ -298,10 +304,8 @@ class ImageList(Component):
             widget.destroy()
 
         # Calculate dimensions
-        screen_width = self.parent.winfo_screenwidth()
-        screen_height = self.parent.winfo_screenheight()
-        button_width = int(screen_width * 0.4)
-        button_height = int(screen_height * 0.18)
+        button_width = int(self.parent.winfo_screenwidth() * 0.30)  # Reduced from 0.4
+        button_height = int(self.parent.winfo_screenheight() * 0.12)  # Reduced from 0.18
 
         # Get current page images
         start_idx = self.current_page * self.images_per_page
@@ -337,8 +341,78 @@ class ImageList(Component):
             self._show_current_page()
 
     def _view_image(self, image_path):
-        # For now, just print the path - we'll implement viewing later
-        print(f"Viewing image: {image_path}")
+        """Display the selected image with a simple viewer"""
+        # Clear current display
+        for widget in self.images_frame.winfo_children():
+            widget.destroy()
+            
+        try:
+            # Get image name from path
+            image_name = os.path.basename(image_path)
+            
+            # Display image name
+            name_label = ttk.Label(
+                self.images_frame,
+                text=image_name,
+                font=('Arial', int(self.parent.winfo_screenheight() * 0.03))
+            )
+            name_label.pack(pady=10)
+            
+            # Load and display image
+            image = Image.open(image_path)
+            
+            # Calculate size to maintain aspect ratio
+            display_width = min(800, self.parent.winfo_width() - 100)
+            display_height = min(600, self.parent.winfo_height() - 200)
+            
+            # Calculate scaling factor
+            width_ratio = display_width / image.width
+            height_ratio = display_height / image.height
+            scale_factor = min(width_ratio, height_ratio)
+            
+            new_width = int(image.width * scale_factor)
+            new_height = int(image.height * scale_factor)
+            
+            # Resize image
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Display image
+            image_label = ttk.Label(self.images_frame, image=photo)
+            image_label.image = photo  # Keep reference
+            image_label.pack(pady=10)
+            
+            # Back button
+            back_btn = RoundedButton(
+                self.images_frame,
+                text="Back",
+                command=self.refresh_images,
+                width=int(self.parent.winfo_screenwidth() * 0.15),
+                height=int(self.parent.winfo_screenheight() * 0.06),
+                bg_color="#4CAF50"
+            )
+            back_btn.pack(pady=20)
+            
+        except Exception as e:
+            error_label = ttk.Label(
+                self.images_frame,
+                text=f"Error displaying image: {str(e)}",
+                font=('Arial', int(self.parent.winfo_screenheight() * 0.02))
+            )
+            error_label.pack(pady=20)
+            
+            # Back button in case of error
+            back_btn = RoundedButton(
+                self.images_frame,
+                text="Back",
+                command=self.refresh_images,
+                width=int(self.parent.winfo_screenwidth() * 0.15),
+                height=int(self.parent.winfo_screenheight() * 0.06),
+                bg_color="#4CAF50"
+            )
+            back_btn.pack(pady=20)
+            """Display the selected image in a dialog"""
+            ImageViewerDialog(self.parent, image_path)
 
 class CaptureReviewComponent(Component):
     def __init__(self, parent, final_callback=None, **kwargs):
@@ -418,19 +492,71 @@ class CaptureReviewComponent(Component):
         self.bypass_button.pack(side=tk.RIGHT, padx=10)
 
     def bypass_photo(self):
-        """Skip the photo-taking process and go straight to name input"""
-        # Clear current UI
-        for widget in self.frame.winfo_children():
-            widget.destroy()
-        
-        # Show name input OCR without an image
-        self.name_input = NameInputOCR(
-            self.frame,
-            image_path=None,  # No image path when bypassing
-            on_confirm=self._handle_name_confirmation,
-            on_cancel=self._handle_name_cancel
-        )
-        self.name_input.pack(fill='both', expand=True)
+        """Skip the photo-taking process and generate a placeholder image"""
+        try:
+            # Create output directory if it doesn't exist
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+            
+            # Generate placeholder image
+            width = 800
+            height = 600
+            placeholder = Image.new('RGB', (width, height), color='lightgray')
+            
+            # Add some text to the placeholder
+            draw = ImageDraw.Draw(placeholder)
+            font_size = 40
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            except:
+                # Fallback to default font if custom font not available
+                font = ImageFont.load_default()
+            
+            text = "Placeholder Image"
+            # Get text size for centering
+            try:
+                text_width = draw.textlength(text, font=font)
+            except:
+                # Fallback for older Pillow versions
+                text_width = font_size * len(text) * 0.6
+            
+            text_position = ((width - text_width) / 2, height / 2 - font_size / 2)
+            draw.text(text_position, text, fill='black', font=font)
+            
+            # Save the placeholder image
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(self.output_dir, f"placeholder_{timestamp}.jpg")
+            placeholder.save(filename)
+            
+            # Update current image path
+            self.current_image_path = filename
+            
+            # Show name input OCR with the placeholder image
+            for widget in self.frame.winfo_children():
+                widget.destroy()
+            
+            self.name_input = NameInputOCR(
+                self.frame,
+                image_path=filename,  # Pass the placeholder image path
+                on_confirm=self._handle_name_confirmation,
+                on_cancel=self._handle_name_cancel
+            )
+            self.name_input.pack(fill='both', expand=True)
+            
+        except Exception as e:
+            print(f"Error creating placeholder image: {e}")
+            # Fallback to original bypass behavior if image creation fails
+            for widget in self.frame.winfo_children():
+                widget.destroy()
+            
+            self.name_input = NameInputOCR(
+                self.frame,
+                image_path=None,
+                on_confirm=self._handle_name_confirmation,
+                on_cancel=self._handle_name_cancel
+            )
+            self.name_input.pack(fill='both', expand=True)
+
 
     def capture_image(self):
         """Capture an image and display it for review"""
@@ -542,11 +668,11 @@ class CaptureReviewComponent(Component):
                 self.final_callback(new_path)
                 
         except Exception as e:
-            tk.messagebox.showerror(
-                "Error",
-                f"Failed to save image with new name: {str(e)}"
-            )
-            
+            print(f"Error saving file: {e}")  # Just print to console instead of showing messagebox
+            if self.final_callback:
+                self.final_callback(self.current_image_path)  # Still proceed even if rename fails
+
+
     def _handle_name_cancel(self):
         """Handle cancellation of name input"""
         # Restore original capture review UI
@@ -584,8 +710,9 @@ class FlashcardApp:
             widget.destroy()
 
     def create_back_button(self):
-        width = int(self.root.winfo_screenwidth() * 0.12)
-        height = int(self.root.winfo_screenheight() * 0.06)
+        # Smaller back button
+        width = int(self.root.winfo_screenwidth() * 0.08)  # Reduced from 0.12
+        height = int(self.root.winfo_screenheight() * 0.04)  # Reduced from 0.06
         
         back_btn = RoundedButton(
             self.container,
@@ -593,9 +720,9 @@ class FlashcardApp:
             command=self.show_main_menu,
             width=width,
             height=height,
-            bg_color="#4CAF50"
+            bg_color="#c6eb34"
         )
-        back_btn.pack(anchor='nw', padx=20, pady=20)
+        back_btn.pack(anchor='nw', padx=5, pady=5)  # Reduced padding
 
     def show_main_menu(self):
         self.clear_container()
@@ -603,8 +730,8 @@ class FlashcardApp:
         grid_frame = ttk.Frame(self.container)
         grid_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        button_width = int(self.root.winfo_screenwidth() * 0.35)
-        button_height = int(self.root.winfo_screenheight() * 0.25)
+        button_width = int(self.root.winfo_screenwidth() * 0.25)  # Reduced from 0.35
+        button_height = int(self.root.winfo_screenheight() * 0.15)  # Reduced from 0.25
         
         buttons = [
             {
@@ -645,7 +772,7 @@ class FlashcardApp:
                 width=button_width,
                 height=button_height
             )
-            btn.frame.grid(row=row, column=col, padx=30, pady=30)
+            btn.frame.grid(row=row, column=col, padx=10, pady=10)  # Reduced from 30
 
     def show_camera_preview(self):
         self.clear_container()
@@ -724,6 +851,7 @@ class CharacterOCRComponent(Component):
         self.num_regions = num_rows * boxes_per_row
         
         # Calculate dimensions based on screen size
+        
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
         
@@ -1011,19 +1139,24 @@ class NameInputOCR(Component):
         # Calculate dimensions based on screen size
         self.screen_width = parent.winfo_screenwidth()
         self.screen_height = parent.winfo_screenheight()
-        self.region_size = int(self.screen_width * 0.12)  # Slightly larger boxes for text
-        self.num_regions = 8  # Allow for longer names
-        self.line_width = max(2, int(self.region_size * 0.03))
+        self.region_size = int(self.screen_width * 0.08)
+        self.num_regions = 8
+        self.line_width = max(1, int(self.region_size * 0.03))
         
-        self._create_ui()
-        self._setup_regions()
-        self._create_controls()
+        # Initialize the result label at class level
+        self.result_label = None
+        self.current_text = ""  # Add this to track the current text
         
         # Initialize drawing state
         self.drawing = False
         self.current_region = None
         self.last_x = None
         self.last_y = None
+        
+        # Create the UI
+        self._create_ui()
+        self._setup_regions()
+        self._create_controls()
 
     def _create_ui(self):
         """Create the main UI components"""
@@ -1063,10 +1196,19 @@ class NameInputOCR(Component):
         )
         self.canvas.pack(expand=True)
         
+        # Result label - Added after canvas
+        self.result_label = ttk.Label(
+            self.frame,
+            text="",  # Empty initially
+            font=('Arial', int(self.screen_height * 0.02))
+        )
+        self.result_label.pack(pady=10)  # Make sure to pack it!
+        
         # Bind events
         self.canvas.bind("<Button-1>", self._start_drawing)
         self.canvas.bind("<B1-Motion>", self._draw)
         self.canvas.bind("<ButtonRelease-1>", self._stop_drawing)
+
 
     def _show_image_preview(self):
         """Show a small preview of the captured image if available"""
@@ -1135,21 +1277,33 @@ class NameInputOCR(Component):
     def _create_controls(self):
         """Create control buttons"""
         control_frame = ttk.Frame(self.frame)
-        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=20)
+        control_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
         
-        button_width = int(self.screen_width * 0.15)
-        button_height = int(self.screen_height * 0.06)
+        button_width = int(self.screen_width * 0.2)
+        button_height = int(self.screen_height * 0.1)
         
-        # Confirm button
-        self.confirm_btn = RoundedButton(
+        # OCR button to read characters
+        self.ocr_btn = RoundedButton(
             control_frame,
-            text="Confirm Name",
-            command=self._confirm_name,
+            text="Read Text",
+            command=self._perform_ocr,
             width=button_width,
             height=button_height,
             bg_color="#c6eb34"
         )
-        self.confirm_btn.pack(side=tk.LEFT, padx=20)
+        self.ocr_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Save button (initially disabled)
+        self.save_btn = RoundedButton(
+            control_frame,
+            text="Save",
+            command=self._save_and_proceed,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.save_btn.pack(side=tk.LEFT, padx=20)
+        self.save_btn.set_enabled(False)  # Disabled until OCR is performed
         
         # Clear button
         self.clear_btn = RoundedButton(
@@ -1173,6 +1327,53 @@ class NameInputOCR(Component):
         )
         self.cancel_btn.pack(side=tk.RIGHT, padx=20)
 
+
+
+    def _perform_ocr(self):
+        """Process the written characters and show result"""
+        results = []
+        for img in self.region_images:
+            img_array = np.array(img)
+            _, thresh = cv2.threshold(
+                img_array, 0, 255,
+                cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
+            
+            text = pytesseract.image_to_string(
+                thresh,
+                config='--psm 10 --oem 3'
+            ).strip()
+            
+            if text:  # Only append non-empty results
+                results.append(text)
+        
+        if results:
+            # Join characters and clean the filename
+            self.current_text = ''.join(results)
+            self.current_text = ''.join(c for c in self.current_text if c.isalnum() or c in '._- ')
+            
+            # Update result label and enable save button
+            self.result_label.configure(text=f"Recognized text: {self.current_text}")
+            self.save_btn.set_enabled(True)
+        else:
+            self.current_text = ""  # Set empty text if no results
+            self.result_label.configure(text="No text detected. Please try again.")
+            self.save_btn.set_enabled(False)
+
+
+    def _save_and_proceed(self):
+        """Save the recognized text and proceed"""
+        if hasattr(self, 'current_text') and self.current_text:
+            if self.on_confirm:
+                self.on_confirm(self.current_text)
+
+    def clear_all(self):
+        """Clear all regions and reset UI"""
+        super().clear_all()  # Call existing clear method
+        self.result_label.config(text="")  # Clear result text
+        self.save_btn.set_enabled(False)  # Disable save button
+
+
     def _confirm_name(self):
         """Process the written characters and confirm the name"""
         results = []
@@ -1195,11 +1396,22 @@ class NameInputOCR(Component):
             # Join characters and clean the filename
             filename = ''.join(results)
             filename = ''.join(c for c in filename if c.isalnum() or c in '._- ')
-            if self.on_confirm:
-                self.on_confirm(filename)
+            
+            # Show confirmation dialog
+            OCRConfirmationDialog(
+                self.parent,
+                filename,
+                on_confirm=lambda name: self._handle_confirmation(name),
+                on_retry=self.clear_all
+            )
         else:
             # Show error if no characters were recognized
             self._show_error("No characters detected. Please write a name.")
+
+    def _handle_confirmation(self, filename):
+        """Handle confirmed filename"""
+        if self.on_confirm:
+            self.on_confirm(filename)
 
     def _show_error(self, message):
         """Show error message to user"""
@@ -1274,6 +1486,195 @@ class NameInputOCR(Component):
             Image.new('L', (self.region_size, self.region_size), 'white')
             for _ in range(self.num_regions)
         ]
+        
+        # Update the result label text
+        if self.result_label:
+            self.result_label.configure(text="")  # Clear result text
+            
+        if hasattr(self, 'save_btn'):
+            self.save_btn.set_enabled(False)  # Disable save button
+
+
+class OCRConfirmationDialog(Component):
+    """Custom dialog for confirming OCR results"""
+    def __init__(self, parent, recognized_text, on_confirm, on_retry, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.recognized_text = recognized_text
+        self.on_confirm = on_confirm
+        self.on_retry = on_retry
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Create semi-transparent overlay
+        self.overlay = tk.Frame(
+            parent,
+            bg='black'
+        )
+        self.overlay.place(
+            x=0, y=0,
+            relwidth=1, relheight=1
+        )
+        self.overlay.configure(bg='black')
+        self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
+        
+        # Further reduce dialog width
+        dialog_width = int(self.screen_width * 0.45)  # Reduced from 0.6
+        dialog_height = int(self.screen_height * 0.4)
+        
+        self.frame.configure(
+            relief='solid',
+            borderwidth=1,
+            padding=10
+        )
+        self.frame.place(
+            relx=0.5, rely=0.5,
+            anchor='center',
+            width=dialog_width,
+            height=dialog_height
+        )
+        self.frame.configure(style='Custom.TFrame')
+        
+        self._create_ui(dialog_width, dialog_height)
+        
+    def _create_ui(self, width, height):
+        # Title
+        ttk.Label(
+            self.frame,
+            text="Confirm Name",
+            font=('Arial', int(self.screen_height * 0.03), 'bold'),
+            justify='center'
+        ).pack(pady=(height * 0.05, height * 0.02))
+        
+        # Recognition result
+        ttk.Label(
+            self.frame,
+            text=f"Recognized text: {self.recognized_text}",
+            font=('Arial', int(self.screen_height * 0.025)),
+            justify='center',
+            wraplength=width * 0.8
+        ).pack(pady=(0, height * 0.05))
+        
+        # Buttons container with fixed width
+        button_frame = ttk.Frame(self.frame, width=width * 0.9)  # Set fixed width
+        button_frame.pack(side='bottom', pady=height * 0.05)
+        button_frame.pack_propagate(False)  # Prevent frame from shrinking
+        
+        # Even smaller buttons with minimal padding
+        button_width = int(width * 0.15)  # Reduced from 0.2
+        button_height = int(height * 0.15)
+        
+        # Confirm button
+        self.confirm_btn = RoundedButton(
+            button_frame,
+            text="Save",
+            command=self._confirm,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.confirm_btn.pack(side='left', padx=width * 0.01)  # Minimal padding
+        
+        # Retry button
+        self.retry_btn = RoundedButton(
+            button_frame,
+            text="Retry",
+            command=self._retry,
+            width=button_width,
+            height=button_height,
+            bg_color="#c6eb34"
+        )
+        self.retry_btn.pack(side='left', padx=width * 0.01)  # Minimal padding
+    
+    def _confirm(self):
+        self.destroy()
+        if self.on_confirm:
+            self.on_confirm(self.recognized_text)
+    
+    def _retry(self):
+        self.destroy()
+        if self.on_retry:
+            self.on_retry()
+    
+    def destroy(self):
+        self.overlay.destroy()
+        super().destroy()
+
+class ImageViewerDialog(Component):
+    """Dialog for viewing full-size images"""
+    def __init__(self, parent, image_path, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.image_path = image_path
+        
+        # Calculate dimensions based on screen size
+        self.screen_width = parent.winfo_screenwidth()
+        self.screen_height = parent.winfo_screenheight()
+        
+        # Create semi-transparent overlay
+        self.overlay = tk.Frame(parent, bg='black')
+        self.overlay.place(x=0, y=0, relwidth=1, relheight=1)
+        self.overlay.configure(bg='black')
+        self.overlay.winfo_toplevel().wm_attributes('-alpha', 0.6)
+        
+        # Create dialog frame
+        self.frame.configure(relief='solid', borderwidth=1, padding=10)
+        self.frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.frame.configure(style='Custom.TFrame')
+        
+        self._create_ui()
+        
+    def _create_ui(self):
+        try:
+            # Load and display image
+            image = Image.open(self.image_path)
+            
+            # Calculate maximum dimensions (80% of screen)
+            max_width = int(self.screen_width * 0.8)
+            max_height = int(self.screen_height * 0.8)
+            
+            # Calculate scaling factor
+            width_ratio = max_width / image.width
+            height_ratio = max_height / image.height
+            scale_factor = min(width_ratio, height_ratio)
+            
+            new_width = int(image.width * scale_factor)
+            new_height = int(image.height * scale_factor)
+            
+            # Resize image
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Create image label
+            self.image_label = ttk.Label(self.frame, image=photo)
+            self.image_label.image = photo
+            self.image_label.pack(pady=10)
+            
+            # Close button
+            close_btn = RoundedButton(
+                self.frame,
+                text="Close",
+                command=self.destroy,
+                width=int(self.screen_width * 0.1),
+                height=int(self.screen_height * 0.06),
+                bg_color="#c6eb34"
+            )
+            close_btn.pack(pady=10)
+            
+            # Bind escape key to close
+            self.frame.winfo_toplevel().bind('<Escape>', lambda e: self.destroy())
+            
+        except Exception as e:
+            print(f"Error displaying image: {e}")
+            ttk.Label(
+                self.frame,
+                text=f"Error displaying image: {str(e)}",
+                font=('Arial', int(self.screen_height * 0.02))
+            ).pack(pady=20)
+    
+    def destroy(self):
+        self.overlay.destroy()
+        super().destroy()
 
 def main():
     root = tk.Tk()
