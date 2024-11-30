@@ -46,7 +46,7 @@ class RoundedButton(Component):
     def __init__(self, parent, text: str, command, bg_color: str = "#c6eb34",
                  hover_color: str = "#a8cc21", text_color: str = "black",
                  width: int = None, height: int = None, corner_radius: int = 10,
-                 **kwargs):
+                 icon_path: str = None, is_menu_button: bool = False, **kwargs):
         super().__init__(parent, **kwargs)
         self.text = text
         self.command = command
@@ -55,10 +55,13 @@ class RoundedButton(Component):
         self.text_color = text_color
         self.disabled_color = "#cccccc"
         self.enabled = True
+        self.icon_path = icon_path
+        self.is_menu_button = is_menu_button
+        self.icon_image = None  # Store reference to prevent garbage collection
         
         # Smaller default sizes for small screens
-        self.width = width or int(parent.winfo_screenwidth() * 0.12)  # Reduced from 0.15
-        self.height = height or int(parent.winfo_screenheight() * 0.06)  # Reduced from 0.08
+        self.width = width or int(parent.winfo_screenwidth() * 0.12)  
+        self.height = height or int(parent.winfo_screenheight() * 0.06)
         self.corner_radius = min(corner_radius, self.height // 4)  # Scale radius with height
         
         self._create_button()
@@ -81,11 +84,24 @@ class RoundedButton(Component):
         )
         self.canvas.itemconfig(self.shape, fill=self.bg_color, outline=self.bg_color)
         
-        # Create text with smaller font size (reduced from 0.3 to 0.2)
-        font_size = int(self.height * 0.15)  # Reduced from 0.2
+        if self.is_menu_button and self.icon_path:
+            # Menu button layout with icon and text
+            icon_size = self.height * 0.5
+            icon_y = self.height * 0.3
+            self._create_icon(self.width/2, icon_y, icon_size)
+            
+            # Text below icon for menu buttons
+            font_size = int(self.height * 0.15)
+            text_y = self.height * 0.8
+        else:
+            # Original button layout
+            font_size = int(self.height * 0.15)
+            text_y = self.height/2
+        
+        # Create text with smaller font size
         self.canvas_text = self.canvas.create_text(
             self.width/2,
-            self.height/2,
+            text_y,
             text=self.text,
             fill=self.text_color,
             font=('Arial', font_size, 'bold')
@@ -113,7 +129,36 @@ class RoundedButton(Component):
         ]
         return self.canvas.create_polygon(points, smooth=True)
 
+    def _create_icon(self, x, y, size):
+        """Create the icon at the specified position"""
+        if self.icon_path:
+            try:
+                # Load and resize the PNG image
+                image = Image.open(self.icon_path)
+                image = image.resize((int(size), int(size)), Image.Resampling.LANCZOS)
+                
+                # Convert to PhotoImage
+                self.icon_image = ImageTk.PhotoImage(image)
+                
+                # Create image on canvas
+                self.icon = self.canvas.create_image(
+                    x, y,
+                    image=self.icon_image,
+                    anchor='center'
+                )
+            except Exception as e:
+                print(f"Error creating icon: {e}")
+                # Fallback to placeholder if image loading fails
+                half_size = size/2
+                self.icon = self.canvas.create_rectangle(
+                    x - half_size, y - half_size,
+                    x + half_size, y + half_size,
+                    fill=self.bg_color,
+                    outline=self.text_color
+                )
+
     def set_enabled(self, enabled: bool):
+        """Enable or disable the button"""
         self.enabled = enabled
         self.canvas.itemconfig(
             self.shape,
@@ -121,18 +166,25 @@ class RoundedButton(Component):
         )
 
     def _on_enter(self, event):
+        """Handle mouse enter event"""
         if self.enabled:
             self.canvas.itemconfig(self.shape, fill=self.hover_color)
 
     def _on_leave(self, event):
+        """Handle mouse leave event"""
         if self.enabled:
             self.canvas.itemconfig(self.shape, fill=self.bg_color)
         else:
             self.canvas.itemconfig(self.shape, fill=self.disabled_color)
 
     def _on_click(self, event):
+        """Handle click event"""
         if self.enabled:
             self.command()
+
+
+
+
 
 class CameraPreview(Component):
     """Camera preview component that strictly follows capture.py implementation"""
@@ -727,52 +779,85 @@ class FlashcardApp:
     def show_main_menu(self):
         self.clear_container()
         
+        # Create absolute-positioned quit button in top left
+        quit_frame = ttk.Frame(self.container)
+        quit_frame.place(x=20, y=20)  # Fixed position in top left
+        
+        quit_button = RoundedButton(
+            quit_frame,
+            text="×",  # Using × symbol for quit
+            command=self.root.quit,
+            width=int(self.root.winfo_screenwidth() * 0.05),  # Small square button
+            height=int(self.root.winfo_screenwidth() * 0.05),
+            bg_color="#ff4d4d",  # Red color
+            hover_color="#ff3333",
+            text_color="#FFFFFF",
+            corner_radius=10
+        )
+        quit_button.pack()
+        
+        # Create main container frame for the grid
         grid_frame = ttk.Frame(self.container)
         grid_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        button_width = int(self.root.winfo_screenwidth() * 0.25)  # Reduced from 0.35
-        button_height = int(self.root.winfo_screenheight() * 0.15)  # Reduced from 0.25
+        # Calculate button dimensions - reduced size
+        button_width = int(self.root.winfo_screenwidth() * 0.25)  # Reduced from 0.325
+        button_height = button_width  # Keep square
         
         buttons = [
             {
-                'text': "Take balls",
-                'command': self.show_ocr,
-                'color': "#4CAF50"
-            },
-            {
-                'text': "Take Picture",
+                'text': "CAMERA",
                 'command': self.show_camera_preview,
-                'color': "#4CAF50"
+                'icon': "images/camera.png",
+                'row': 0,
+                'col': 0,
             },
             {
-                'text': "View Images",
+                'text': "ALBUM",
                 'command': self.show_image_list,
-                'color': "#4CAF50"
+                'icon': "images/album.png",
+                'row': 0,
+                'col': 1,
             },
             {
-                'text': "Settings",
+                'text': "NOTES",
+                'command': self.show_ocr,
+                'icon': "images/notes.png",
+                'row': 1,
+                'col': 0,
+            },
+            {
+                'text': "SETTINGS",
                 'command': lambda: print("Settings clicked"),
-                'color': "#4CAF50"
-            },
-            {
-                'text': "Quit",
-                'command': self.root.quit,
-                'color': "#4CAF50"
+                'icon': "images/settings.png",
+                'row': 1,
+                'col': 1,
             }
         ]
         
-        for i, btn_props in enumerate(buttons):
-            row = i // 2
-            col = i % 2
-            btn = RoundedButton(
-                grid_frame,
-                text=btn_props['text'],
-                command=btn_props['command'],
-                bg_color=btn_props['color'],
-                width=button_width,
-                height=button_height
+        # Create buttons in grid layout
+        for btn in buttons:
+            button_frame = ttk.Frame(grid_frame)
+            button_frame.grid(
+                row=btn['row'], 
+                column=btn['col'], 
+                padx=10, 
+                pady=10
             )
-            btn.frame.grid(row=row, column=col, padx=10, pady=10)  # Reduced from 30
+            
+            RoundedButton(
+                button_frame,
+                text=btn['text'],
+                command=btn['command'],
+                width=button_width,
+                height=button_height,
+                bg_color="#FFFFFF",  # White background
+                text_color="#000000",  # Black text
+                corner_radius=20,
+                icon_path=btn['icon'],
+                is_menu_button=True
+            ).pack()
+
 
     def show_camera_preview(self):
         self.clear_container()
